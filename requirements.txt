@@ -1,0 +1,9 @@
+sentence_transformers==2.2.2
+torchdata==0.7.1
+torch==2.1.2
+transformers==4.36.1
+evaluate
+recsys_metrics
+zstandard
+accelerate
+torchmetrics
