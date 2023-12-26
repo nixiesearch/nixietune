@@ -1,10 +1,10 @@
 from sentence_transformers import SentenceTransformer, losses, util
-from microtune.format import TripletDataset
+from nixietune.format import TripletDataset
 from transformers import AutoTokenizer, TrainingArguments
 from torch.utils.data import DataLoader
-from microtune.collate import EmbeddingCollator
+from nixietune.collate import EmbeddingCollator
 from datasets import load_dataset, Dataset
-from microtune.model.biencoder import BiencoderTrainer, BiencoderModel
+from nixietune.model.biencoder import BiencoderTrainer, BiencoderModel
 from typing import Dict
 from transformers.trainer_utils import EvalPrediction
 import logging
