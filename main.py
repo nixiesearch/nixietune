@@ -1,4 +1,4 @@
-from sentence_transformers import SentenceTransformer, losses, util
+from sentence_transformers import SentenceTransformer
 from nixietune.trainer import BiencoderTrainer, BiencoderTrainingArguments
 from nixietune.log import setup_logging
 from datasets import load_dataset

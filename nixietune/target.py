@@ -1,9 +1,8 @@
 from abc import abstractmethod
 from torch import nn
 from nixietune.tokenize import DocTokenizer, QueryDocLabelTokenizer, QueryPosNegsTokenizer
-from typing import List, Optional
 from torch.nn.modules import Module
-from sentence_transformers import SentenceTransformer, losses, util
+from sentence_transformers import SentenceTransformer, losses
 from transformers import PreTrainedTokenizerBase
 
 

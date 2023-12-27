@@ -1,7 +1,7 @@
 from transformers import PreTrainedModel
 from sentence_transformers import SentenceTransformer
 from transformers import TrainingArguments, Trainer
-from typing import List, Dict, Any, Union, Tuple, Optional
+from typing import List, Dict, Any, Union, Tuple
 import torch
 from torch import nn
 from dataclasses import dataclass, field

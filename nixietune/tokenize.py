@@ -1,10 +1,7 @@
 from abc import abstractmethod
-from torch._tensor import Tensor
 from transformers import PreTrainedTokenizerBase
-from typing import Dict, List, Any, Union
+from typing import Dict, List
 import numpy as np
-import torch
-from transformers.tokenization_utils_base import BatchEncoding
 
 
 class DocTokenizer:
@@ -14,16 +11,6 @@ class DocTokenizer:
     @abstractmethod
     def tokenize(self, batch: Dict[str, List]) -> Dict[str, List]:
         pass
-
-    def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, Tensor]]:
-        features = [[]] * (self.neg_count + 2)
-        for item in items:
-            for index, feature in enumerate(item["features"]):
-                features[index].append(feature)
-
-        padded_features = [self.pad(f) for f in features]
-        result = {"features": padded_features, "return_loss": True}
-        return result
 
     def make_tokenized_cache(self, batch: Dict[str, List]) -> Dict[str, Dict[str, np.ndarray]]:
         docs: List[str] = []
@@ -41,15 +28,6 @@ class DocTokenizer:
                 "attention_mask": attention_mask.astype("int8"),
             }
         return token_cache
-
-    def pad(self, docs: List[Dict[str, Any]]) -> BatchEncoding:
-        batch = BatchEncoding(
-            data={
-                "input_ids": [f["input_ids"] for f in docs],
-                "attention_mask": [f["attention_mask"] for f in docs],
-            }
-        )
-        return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")
 
 
 class QueryDocLabelTokenizer(DocTokenizer):
