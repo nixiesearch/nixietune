@@ -1,9 +1,11 @@
 sentence_transformers==2.2.2
 torchdata==0.7.1
 torch==2.1.2
-transformers==4.36.1
-evaluate
-recsys_metrics
+transformers==4.36.2
+evaluate==0.4.1
 zstandard
-accelerate
-torchmetrics
+accelerate==0.25.0
+torchmetrics==1.2.1
+datasets==2.16.0
+pytest
+mypy
