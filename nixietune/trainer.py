@@ -7,10 +7,10 @@ from torch import nn
 from dataclasses import dataclass, field
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
-from torch.utils.data import DataLoader
-from transformers.trainer_utils import seed_worker
-from nixietune.target import CosineSimilarityTarget, ContrastiveTarget
+from nixietune.tokenize import QueryDocLabelTokenizer
+from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget
 import logging
+from transformers.tokenization_utils_base import BatchEncoding
 
 logger = logging.getLogger()
 
@@ -34,7 +34,7 @@ class BiencoderModel(PreTrainedModel):
         super().__init__(model[0].auto_model.config)
         self.model = model
 
-    def forward(self, tensor):
+    def forward(self, tensor, return_loss: bool = True):
         return self.model.forward(tensor)
 
 
@@ -49,17 +49,20 @@ class BiencoderTrainer(Trainer):
         **kwargs,
     ) -> None:
         self.eval_metrics = EvalMetrics(eval_metrics)
-        self.tokenizer = model.tokenizer
-        self.tokenizer.model_max_length = args.seq_len
-        self.tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
+        tokenizer = model.tokenizer
+        tokenizer.model_max_length = args.seq_len
+        tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         match args.target:
             case "cosine_similarity":
-                self.target = CosineSimilarityTarget(model, self.tokenizer)
+                self.target = CosineSimilarityTarget(model, tokenizer)
             case "contrastive":
-                self.target = ContrastiveTarget(model, self.tokenizer)
+                self.target = ContrastiveTarget(model, tokenizer)
+            case "infonce":
+                self.target = InfoNCETarget(model, tokenizer, 4)
         self.processor = self.target.process()
         self.loss = self.target.loss()
         self.loss.to(model.device)
+        args.label_names = ["label"]
         train_processed = train_dataset.map(
             self.processor.tokenize,
             batched=True,
@@ -68,8 +71,9 @@ class BiencoderTrainer(Trainer):
             remove_columns=["query", "pos", "neg"],
             desc="Tokenizing train dataset",
         )
+        eval_processor = QueryDocLabelTokenizer(tokenizer)
         eval_processed = eval_dataset.map(
-            self.processor.tokenize,
+            eval_processor.tokenize,
             batched=True,
             batch_size=128,
             num_proc=args.dataloader_num_workers,
@@ -83,7 +87,8 @@ class BiencoderTrainer(Trainer):
             preprocess_logits_for_metrics=self.move_to_cpu,
             train_dataset=train_processed,
             eval_dataset=eval_processed,
-            data_collator=self.processor.collate,
+            data_collator=self.collate,
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -93,8 +98,13 @@ class BiencoderTrainer(Trainer):
         inputs: Dict[str, Dict[str, torch.Tensor]],
         return_outputs: bool = False,
     ) -> Union[Tuple[torch.Tensor, Dict[str, torch.Tensor]], torch.Tensor]:
-        features = self.processor.collect(inputs)
-        loss = self.loss(features, inputs["label"])
+        features = []
+        for column in inputs["features"]:
+            features.append({"input_ids": column.input_ids, "attention_mask": column.attention_mask})
+        if self.target.label_name() is None:
+            loss = self.loss(features, torch.Tensor())
+        else:
+            loss = self.loss(features, inputs[self.target.label_name()])
         if return_outputs:
             output = [torch.Tensor()] + features
             return loss, output
@@ -106,3 +116,29 @@ class BiencoderTrainer(Trainer):
             se = f["sentence_embedding"]
             result.append({"sentence_embedding": se.clone()})
         return result
+
+    def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, torch.Tensor]]:
+        features = []
+        for item in items:
+            for index, feature in enumerate(item["features"]):
+                if index >= len(features):
+                    features.extend([[]] * (index + 1 - len(features)))
+                features[index].append(feature)
+
+        padded_features = [self.pad(f) for f in features]
+        result = {}
+        result["features"] = padded_features
+        if "label" in items[0]:
+            result["label"] = torch.tensor([item["label"] for item in items])
+        else:
+            result["return_loss"] = True
+        return result
+
+    def pad(self, docs: List[Dict[str, Any]]) -> BatchEncoding:
+        batch = BatchEncoding(
+            data={
+                "input_ids": [f["input_ids"] for f in docs],
+                "attention_mask": [f["attention_mask"] for f in docs],
+            }
+        )
+        return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")

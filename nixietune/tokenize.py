@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from torch._tensor import Tensor
 from transformers import PreTrainedTokenizerBase
 from typing import Dict, List, Any, Union
 import numpy as np
@@ -14,13 +15,15 @@ class DocTokenizer:
     def tokenize(self, batch: Dict[str, List]) -> Dict[str, List]:
         pass
 
-    @abstractmethod
-    def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, torch.Tensor]]:
-        pass
+    def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, Tensor]]:
+        features = [[]] * (self.neg_count + 2)
+        for item in items:
+            for index, feature in enumerate(item["features"]):
+                features[index].append(feature)
 
-    @abstractmethod
-    def collect(self, inputs: Dict[str, torch.Tensor]) -> List[Dict[str, torch.Tensor]]:
-        pass
+        padded_features = [self.pad(f) for f in features]
+        result = {"features": padded_features, "return_loss": True}
+        return result
 
     def make_tokenized_cache(self, batch: Dict[str, List]) -> Dict[str, Dict[str, np.ndarray]]:
         docs: List[str] = []
@@ -56,8 +59,7 @@ class QueryDocLabelTokenizer(DocTokenizer):
     def tokenize(self, batch: Dict[str, List]) -> Dict[str, List]:
         token_cache = self.make_tokenized_cache(batch)
 
-        queries = []
-        docs = []
+        features = []
         lengths = []
         labels = []
         for q, p, n in zip(batch.get("query", []), batch.get("pos", []), batch.get("neg", [])):
@@ -65,34 +67,41 @@ class QueryDocLabelTokenizer(DocTokenizer):
             for pos in p:
                 doc = pos["doc"]
                 doc_tokens = token_cache[doc]
-                queries.append(query_tokens)
-                docs.append(doc_tokens)
+                features.append([query_tokens, doc_tokens])
                 lengths.append(query_tokens["input_ids"].size + doc_tokens["input_ids"].size)
                 labels.append(float(pos.get("score", 1)))
             for neg in n:
                 doc = neg["doc"]
                 doc_tokens = token_cache[doc]
-                queries.append(query_tokens)
-                docs.append(doc_tokens)
+                features.append([query_tokens, doc_tokens])
                 lengths.append(query_tokens["input_ids"].size + doc_tokens["input_ids"].size)
                 labels.append(float(pos.get("score", 0)))
-        result = {"query": queries, "doc": docs, "label": labels, "length": lengths}
+        result = {"features": features, "label": labels, "length": lengths}
         return result
 
-    def collate(self, items: List[Dict[str, Any]]) -> Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]:
-        queries = [item["query"] for item in items]
-        docs = [item["doc"] for item in items]
-        padded_queries = self.pad(queries)
-        padded_docs = self.pad(docs)
-        result = {
-            "query": padded_queries,
-            "doc": padded_docs,
-            "label": torch.tensor([item["label"] for item in items]),
-        }
-        return result
 
-    def collect(self, items: Dict[str, Union[Dict[str, torch.Tensor], torch.Tensor]]) -> List[Dict[str, torch.Tensor]]:
-        result = []
-        for column in ["query", "doc"]:
-            result.append({"input_ids": items[column].input_ids, "attention_mask": items[column].attention_mask})
+class QueryPosNegsTokenizer(DocTokenizer):
+    def __init__(self, tokenizer: PreTrainedTokenizerBase, neg_count: int) -> None:
+        self.tokenizer = tokenizer
+        self.neg_count = neg_count
+
+    def tokenize(self, batch: Dict[str, List]) -> Dict[str, List]:
+        token_cache = self.make_tokenized_cache(batch)
+
+        docs = []
+        lengths = []
+        for q, p, n in zip(batch.get("query", []), batch.get("pos", []), batch.get("neg", [])):
+            if len(n) >= self.neg_count:
+                query_tokens = token_cache[q]
+                neg_tokens = []
+                length = query_tokens["input_ids"].size
+                for neg in n[:3]:
+                    t = token_cache[neg["doc"]]
+                    length += t["input_ids"].size
+                    neg_tokens.append(t)
+                for pos in p:
+                    pos_tokens = token_cache[pos["doc"]]
+                    docs.append([query_tokens, pos_tokens] + neg_tokens)
+                    lengths.append(pos_tokens["input_ids"].size + length)
+        result = {"features": docs, "length": lengths}
         return result

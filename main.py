@@ -6,18 +6,18 @@ from datasets import load_dataset
 setup_logging()
 
 path = "/home/shutty/data/esci"
-files = {"train": f"{path}/train.jsonl", "test": f"{path}/test5.jsonl"}
+files = {"train": f"{path}/train.jsonl", "test": f"{path}/test2.jsonl"}
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 dataset = load_dataset("json", data_files=files, num_proc=8)
 
 training_arguments = BiencoderTrainingArguments(
     seq_len=128,
-    target="contrastive",
+    target="infonce",
     report_to=None,
     output_dir=".",
     num_train_epochs=1,
     seed=33,
-    per_device_train_batch_size=256,
+    per_device_train_batch_size=128,
     per_device_eval_batch_size=256,
     fp16=True,
     # checkpoint settings
@@ -27,10 +27,9 @@ training_arguments = BiencoderTrainingArguments(
     # needed to get sentence_A and sentence_B
     remove_unused_columns=False,
     dataloader_num_workers=14,
-    eval_steps=100,
-    logging_steps=100,
+    eval_steps=500,
+    logging_steps=500,
     evaluation_strategy="steps",
-    label_names=["label"],
     torch_compile=True,
     save_strategy="no",
 )
