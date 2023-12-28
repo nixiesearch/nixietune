@@ -4,9 +4,22 @@ from nixietune.tokenize import DocTokenizer, QueryDocLabelTokenizer, QueryPosNeg
 from torch.nn.modules import Module
 from sentence_transformers import SentenceTransformer, losses
 from transformers import PreTrainedTokenizerBase
+from typing import Optional
 
 
 class Target:
+    def __init__(
+        self,
+        model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
+        query_prefix: Optional[str],
+        doc_prefix: Optional[str],
+    ) -> None:
+        self.model = model
+        self.tokenizer = tokenizer
+        self.query_prefix = query_prefix
+        self.doc_prefix = doc_prefix
+
     @abstractmethod
     def loss(self) -> nn.Module:
         pass
@@ -17,9 +30,14 @@ class Target:
 
 
 class CosineSimilarityTarget(Target):
-    def __init__(self, model: SentenceTransformer, tokenizer: PreTrainedTokenizerBase) -> None:
-        self.model = model
-        self.tokenizer = tokenizer
+    def __init__(
+        self,
+        model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
+        query_prefix: Optional[str],
+        doc_prefix: Optional[str],
+    ) -> None:
+        super().__init__(model, tokenizer, query_prefix, doc_prefix)
 
     def loss(self) -> Module:
         return losses.CosineSimilarityLoss(self.model)
@@ -29,9 +47,14 @@ class CosineSimilarityTarget(Target):
 
 
 class ContrastiveTarget(Target):
-    def __init__(self, model: SentenceTransformer, tokenizer: PreTrainedTokenizerBase) -> None:
-        self.model = model
-        self.tokenizer = tokenizer
+    def __init__(
+        self,
+        model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
+        query_prefix: Optional[str],
+        doc_prefix: Optional[str],
+    ) -> None:
+        super().__init__(model, tokenizer, query_prefix, doc_prefix)
 
     def loss(self) -> Module:
         return losses.ContrastiveLoss(self.model)
@@ -41,9 +64,15 @@ class ContrastiveTarget(Target):
 
 
 class InfoNCETarget(Target):
-    def __init__(self, model: SentenceTransformer, tokenizer: PreTrainedTokenizerBase, num_negs: int) -> None:
-        self.model = model
-        self.tokenizer = tokenizer
+    def __init__(
+        self,
+        model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
+        num_negs: int,
+        query_prefix: Optional[str],
+        doc_prefix: Optional[str],
+    ) -> None:
+        super().__init__(model, tokenizer, query_prefix, doc_prefix)
         self.num_negs = num_negs
 
     def loss(self) -> Module:
@@ -55,10 +84,15 @@ class InfoNCETarget(Target):
 
 class TripletTarget(Target):
     def __init__(
-        self, model: SentenceTransformer, tokenizer: PreTrainedTokenizerBase, num_negs: int, margin: float
+        self,
+        model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
+        query_prefix: Optional[str],
+        doc_prefix: Optional[str],
+        num_negs: int,
+        margin: float,
     ) -> None:
-        self.model = model
-        self.tokenizer = tokenizer
+        super().__init__(model, tokenizer, query_prefix, doc_prefix)
         self.num_negs = num_negs
         self.margin = margin
 

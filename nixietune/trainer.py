@@ -34,6 +34,14 @@ class BiencoderTrainingArguments(TrainingArguments):
 
     triplet_margin: float = field(default=5, metadata={"help": "Margin value for Triplet loss"})
 
+    query_prefix: Optional[None] = field(
+        default=None, metadata={"help": "Prefix for all queries. Used for asymmetrical models like E5."}
+    )
+
+    document_prefix: Optional[None] = field(
+        default=None, metadata={"help": "Prefix for all documents. Used for asymmetrical models like E5."}
+    )
+
 
 class BiencoderModel(PreTrainedModel):
     supports_gradient_checkpointing = True
@@ -62,14 +70,18 @@ class BiencoderTrainer(Trainer):
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         match args.target:
             case "cosine_similarity":
-                self.target = CosineSimilarityTarget(model, tokenizer)
+                self.target = CosineSimilarityTarget(model, tokenizer, args.query_prefix, args.document_prefix)
             case "contrastive":
-                self.target = ContrastiveTarget(model, tokenizer)
+                self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
             case "infonce":
-                self.target = InfoNCETarget(model, tokenizer, args.num_negatives)
+                self.target = InfoNCETarget(
+                    model, tokenizer, args.num_negatives, args.query_prefix, args.document_prefix
+                )
             case "triplet":
-                self.target = TripletTarget(model, tokenizer, args.num_negatives, args.triplet_margin)
-        self.eval_target = CosineSimilarityTarget(model, tokenizer)
+                self.target = TripletTarget(
+                    model, tokenizer, args.query_prefix, args.document_prefix, args.num_negatives, args.triplet_margin
+                )
+        self.eval_target = CosineSimilarityTarget(model, tokenizer, args.query_prefix, args.document_prefix)
         self.processor = self.target.process()
         self.eval_processor = self.eval_target.process()
         self.loss = self.target.loss()

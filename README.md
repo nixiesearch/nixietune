@@ -25,10 +25,12 @@ To fine-tune a semantic search embedding model on your data, you need:
 Nixietune is not yet published to PyPi, but you can install it from git:
 
 ```bash
+# get the code
 git clone git@github.com:nixiesearch/nixietune.git
 cd nixietune
-python -m venv .venv
-source .venv/bin/activate
+# setup the environment
+python -m venv .venv && source .venv/bin/activate
+# install dependencies
 pip install -r requirements.txt
 ```
 
@@ -64,11 +66,51 @@ The document schema can be described as:
 
 ### Run the training
 
-todo
+Let's fine-tune a [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) embedding model on a [nixiesearch/ms-marco-hard-negatives](https://huggingface.co/datasets/nixiesearch/ms-marco-hard-negatives) dataset, using the InfoNCE loss. 
+
+```shell
+python examples/train_msmarco.py examples/msmarco.json
+```
+
+The [`msmarco.json`](examples/msmarco.json) configuration file is based on a HuggingFace Transformer TrainingArguments with some extra settings:
+
+```json
+{
+    "seq_len": 128,
+    "target": "infonce",
+    "model_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
+    "output_dir": "out",
+    "num_train_epochs": 1,
+    "seed": 33,
+    "per_device_train_batch_size": 256,
+    "per_device_eval_batch_size": 256,
+    "fp16": true,
+    "logging_dir": "logs",
+    "gradient_checkpointing": true,
+    "gradient_accumulation_steps": 1,
+    "dataloader_num_workers": 14,
+    "eval_steps": 0.1,
+    "logging_steps": 0.1,
+    "evaluation_strategy": "steps",
+    "torch_compile": true,
+    "report_to": [],
+    "save_strategy": "epoch",
+    "num_negatives": 8
+}
+```
+
+It takes around 20 minutes to fine-tune an `all-MiniLM-L6-v2` on a MS MARCO hard negatives on a single RTX4090 GPU.
 
 ### Choosing the best parameters
 
-todo
+The following training parameters are worth tuning:
+
+* `target`: the training recipe. Currently supported targets are `infonce`/`cosine_similarity`/`contrastive`/`triplet`. If not sure, start with `infonce`.
+* `model_name_or_path`: which model to fine-tune. Any SBERT-supported model should work.
+* `per_device_train_batch_size`: batch size. Too small values lead to sub-par quality and slow training. Too large need a lot of VRAM. Start with 128 and go up.
+* `seq_len`: context length of the model. Usually it's around 128-160 for most models in MTEB leaderboard.
+* `gradient_checkpointing`: reduces VRAM usage sugnificantly (up to 70%) with a small 10% performance penalty, as we recompute gradients instead of storing them. If unsure, choose `true`
+* `num_negatives`: for `infonce`/`triplet` targets, how many negatives from the dataset to select.
 
 ## License
 
