@@ -1,9 +1,10 @@
 from transformers import PreTrainedModel
 from sentence_transformers import SentenceTransformer
 from transformers import TrainingArguments, Trainer
-from typing import List, Dict, Any, Union, Tuple
+from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
 from dataclasses import dataclass, field
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
@@ -11,6 +12,9 @@ from nixietune.tokenize import QueryDocLabelTokenizer
 from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
+from tqdm import tqdm
+import numpy as np
+from itertools import islice
 
 logger = logging.getLogger()
 
@@ -23,7 +27,7 @@ class BiencoderTrainingArguments(TrainingArguments):
     )
 
     target: str = field(
-        default="cosine_similarity", metadata={"help": "Optimization target: cosine_similarity/contrastive"}
+        default="infonce", metadata={"help": "Optimization target: cosine_similarity/contrastive/infonce"}
     )
 
 
@@ -63,6 +67,9 @@ class BiencoderTrainer(Trainer):
         self.loss = self.target.loss()
         self.loss.to(model.device)
         args.label_names = ["label"]
+        args.gradient_checkpointing_kwargs = {"use_reentrant": False}
+        args.remove_unused_columns = False
+        self.print_raw_stats(train_dataset)
         train_processed = train_dataset.map(
             self.processor.tokenize,
             batched=True,
@@ -71,6 +78,7 @@ class BiencoderTrainer(Trainer):
             remove_columns=["query", "pos", "neg"],
             desc="Tokenizing train dataset",
         )
+        self.print_tokenized_stats(train_processed)
         eval_processor = QueryDocLabelTokenizer(tokenizer)
         eval_processed = eval_dataset.map(
             eval_processor.tokenize,
@@ -80,9 +88,11 @@ class BiencoderTrainer(Trainer):
             remove_columns=["query", "pos", "neg"],
             desc="Tokenizing test dataset",
         )
+        bi_model = BiencoderModel(model)
+        bi_model.warnings_issued["estimate_tokens"] = True
         super().__init__(
             args=args,
-            model=BiencoderModel(model),
+            model=bi_model,
             compute_metrics=self.eval_metrics.compute,
             preprocess_logits_for_metrics=self.move_to_cpu,
             train_dataset=train_processed,
@@ -101,10 +111,10 @@ class BiencoderTrainer(Trainer):
         features = []
         for column in inputs["features"]:
             features.append({"input_ids": column.input_ids, "attention_mask": column.attention_mask})
-        if self.target.label_name() is None:
-            loss = self.loss(features, torch.Tensor())
+        if "label" in inputs:
+            loss = self.loss(features, inputs["label"])
         else:
-            loss = self.loss(features, inputs[self.target.label_name()])
+            loss = self.loss(features, torch.Tensor())
         if return_outputs:
             output = [torch.Tensor()] + features
             return loss, output
@@ -142,3 +152,46 @@ class BiencoderTrainer(Trainer):
             }
         )
         return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")
+
+    def num_tokens(self, train_dl: DataLoader, max_steps: Optional[int] = None) -> int:
+        """
+        Helper to get number of tokens in a [`~torch.utils.data.DataLoader`] by enumerating dataloader.
+        """
+        train_tokens = 0
+        try:
+            for step, batch in enumerate(train_dl):
+                tokens = batch["input_ids"].numel()
+                if max_steps is not None:
+                    return tokens * max_steps
+                train_tokens += tokens
+            return train_tokens
+        except KeyError:
+            logger.warning("Cannot get num_tokens from dataloader")
+            return train_tokens
+
+    def print_raw_stats(self, dataset: Dataset, samples: int = 5000) -> None:
+        positives_per_query = []
+        negatives_per_query = []
+        for row in tqdm(islice(dataset, samples), desc="Collecting raw stats", total=samples):
+            pos = len(row["pos"])
+            positives_per_query.append(pos)
+            neg = len(row["neg"])
+            negatives_per_query.append(neg)
+        ppq = np.percentile(positives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+        npq = np.percentile(negatives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+        logger.info(f"Negatives per query: {npq}")
+        logger.info(f"Positives per query: {ppq}")
+
+    def print_tokenized_stats(self, dataset: Dataset, samples: int = 5000) -> None:
+        query_tokens = []
+        doc_tokens = []
+        for row in tqdm(islice(dataset, samples), desc="Collecting token stats", total=samples):
+            features = row["features"]
+            query, positive, *docs = features
+            query_tokens.append(len(query["input_ids"]))
+            doc_tokens.append(len(positive["input_ids"]))
+            [doc_tokens.append(len(neg["input_ids"])) for neg in docs]
+        qtp = np.percentile(query_tokens, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], method="nearest")
+        dtp = np.percentile(doc_tokens, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], method="nearest")
+        logger.info(f"Query tokens:    {qtp}")
+        logger.info(f"Document tokens: {dtp}")

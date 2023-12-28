@@ -2,3 +2,6 @@
 .venv
 .mypy_cache
 __pycache__
+wandb
+out
+logs

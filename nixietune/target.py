@@ -51,3 +51,4 @@ class InfoNCETarget(Target):
 
     def process(self) -> DocTokenizer:
         return QueryPosNegsTokenizer(self.tokenizer, self.num_negs)
+

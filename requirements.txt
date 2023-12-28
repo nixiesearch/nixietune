@@ -8,4 +8,4 @@ accelerate==0.25.0
 torchmetrics==1.2.1
 datasets==2.16.0
 pytest
-mypy
+wandb
