@@ -30,6 +30,10 @@ class BiencoderTrainingArguments(TrainingArguments):
         default="infonce", metadata={"help": "Optimization target: cosine_similarity/contrastive/infonce"}
     )
 
+    infonce_negatives: int = field(
+        default=4, metadata={"help": "Number of negatives to use for InfoNCE loss"}
+    )
+
 
 class BiencoderModel(PreTrainedModel):
     supports_gradient_checkpointing = True
@@ -62,7 +66,7 @@ class BiencoderTrainer(Trainer):
             case "contrastive":
                 self.target = ContrastiveTarget(model, tokenizer)
             case "infonce":
-                self.target = InfoNCETarget(model, tokenizer, 4)
+                self.target = InfoNCETarget(model, tokenizer, args.infonce_negatives)
         self.processor = self.target.process()
         self.loss = self.target.loss()
         self.loss.to(model.device)
