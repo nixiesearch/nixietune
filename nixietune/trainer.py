@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
 from nixietune.tokenize import QueryDocLabelTokenizer
-from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget
+from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
@@ -30,9 +30,9 @@ class BiencoderTrainingArguments(TrainingArguments):
         default="infonce", metadata={"help": "Optimization target: cosine_similarity/contrastive/infonce"}
     )
 
-    infonce_negatives: int = field(
-        default=4, metadata={"help": "Number of negatives to use for InfoNCE loss"}
-    )
+    num_negatives: int = field(default=4, metadata={"help": "Number of negatives to use for InfoNCE/Triplet loss"})
+
+    triplet_margin: float = field(default=5, metadata={"help": "Margin value for Triplet loss"})
 
 
 class BiencoderModel(PreTrainedModel):
@@ -42,7 +42,7 @@ class BiencoderModel(PreTrainedModel):
         super().__init__(model[0].auto_model.config)
         self.model = model
 
-    def forward(self, tensor, return_loss: bool = True):
+    def forward(self, tensor, return_loss: bool = False):
         return self.model.forward(tensor)
 
 
@@ -66,10 +66,16 @@ class BiencoderTrainer(Trainer):
             case "contrastive":
                 self.target = ContrastiveTarget(model, tokenizer)
             case "infonce":
-                self.target = InfoNCETarget(model, tokenizer, args.infonce_negatives)
+                self.target = InfoNCETarget(model, tokenizer, args.num_negatives)
+            case "triplet":
+                self.target = TripletTarget(model, tokenizer, args.num_negatives, args.triplet_margin)
+        self.eval_target = CosineSimilarityTarget(model, tokenizer)
         self.processor = self.target.process()
+        self.eval_processor = self.eval_target.process()
         self.loss = self.target.loss()
         self.loss.to(model.device)
+        self.eval_loss = self.eval_target.loss()
+        self.eval_loss.to(model.device)
         args.label_names = ["label"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
@@ -83,9 +89,8 @@ class BiencoderTrainer(Trainer):
             desc="Tokenizing train dataset",
         )
         self.print_tokenized_stats(train_processed)
-        eval_processor = QueryDocLabelTokenizer(tokenizer)
         eval_processed = eval_dataset.map(
-            eval_processor.tokenize,
+            self.eval_processor.tokenize,
             batched=True,
             batch_size=128,
             num_proc=args.dataloader_num_workers,
@@ -115,10 +120,14 @@ class BiencoderTrainer(Trainer):
         features = []
         for column in inputs["features"]:
             features.append({"input_ids": column.input_ids, "attention_mask": column.attention_mask})
-        if "label" in inputs:
-            loss = self.loss(features, inputs["label"])
+        if return_outputs is True:
+            target_loss = self.eval_loss
         else:
-            loss = self.loss(features, torch.Tensor())
+            target_loss = self.loss
+        if "label" in inputs:
+            loss = target_loss(features, inputs["label"])
+        else:
+            loss = target_loss(features, torch.Tensor())
         if return_outputs:
             output = [torch.Tensor()] + features
             return loss, output

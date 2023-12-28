@@ -2,7 +2,7 @@
 name = "nixietune"
 version = "0.0.1"
 authors = [
-    { name="Grebennikov Roman" email="grv@dfdx.me" }
+    { name="Grebennikov Roman", email="grv@dfdx.me" },
 ]
 description = "A semantic search embedding model fine-tuning tool"
 readme = "README.md"
@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
     "Environment :: GPU",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 [project.urls]

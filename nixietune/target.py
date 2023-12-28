@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from torch import nn
-from nixietune.tokenize import DocTokenizer, QueryDocLabelTokenizer, QueryPosNegsTokenizer
+from nixietune.tokenize import DocTokenizer, QueryDocLabelTokenizer, QueryPosNegsTokenizer, TripletTokenizer
 from torch.nn.modules import Module
 from sentence_transformers import SentenceTransformer, losses
 from transformers import PreTrainedTokenizerBase
@@ -52,3 +52,20 @@ class InfoNCETarget(Target):
     def process(self) -> DocTokenizer:
         return QueryPosNegsTokenizer(self.tokenizer, self.num_negs)
 
+
+class TripletTarget(Target):
+    def __init__(
+        self, model: SentenceTransformer, tokenizer: PreTrainedTokenizerBase, num_negs: int, margin: float
+    ) -> None:
+        self.model = model
+        self.tokenizer = tokenizer
+        self.num_negs = num_negs
+        self.margin = margin
+
+    def loss(self) -> Module:
+        return losses.TripletLoss(
+            self.model, distance_metric=losses.TripletDistanceMetric.COSINE, triplet_margin=self.margin
+        )
+
+    def process(self) -> DocTokenizer:
+        return TripletTokenizer(self.tokenizer, neg_count=self.num_negs)

@@ -20,5 +20,6 @@
     "report_to": [
         "wandb"
     ],
-    "save_strategy": "epoch"
+    "save_strategy": "epoch",
+    "num_negatives": 2
 }

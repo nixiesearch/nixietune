@@ -33,6 +33,8 @@ def main():
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     model = SentenceTransformer(model_args.model_name_or_path)
+    # train = load_dataset("nixiesearch/ms-marco-hard-negatives", split="train")
+    # test = load_dataset("nixiesearch/ms_marco",)
     dataset = load_dataset(
         "json",
         data_files={"train": dataset_args.train_dataset, "test": dataset_args.eval_dataset},
