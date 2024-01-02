@@ -4,11 +4,12 @@ import sys
 from sentence_transformers import SentenceTransformer
 from transformers.trainer_callback import TrainerControl, TrainerState
 from transformers.training_args import TrainingArguments
-from nixietune.trainer import BiencoderTrainer, BiencoderTrainingArguments
+from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
 from nixietune.log import setup_logging
-from datasets import load_dataset, concatenate_datasets
+from datasets import load_dataset
 from transformers import HfArgumentParser, TrainerCallback
 import logging
+from nixietune import load_dataset_split
 
 setup_logging()
 
@@ -44,12 +45,8 @@ def main():
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     model = SentenceTransformer(model_args.model_name_or_path)
-    # train = load_dataset(dataset_args.train_dataset, split="train")
-    # test = load_dataset(dataset_args.eval_dataset, split="test")
-    train = load_dataset(
-        "json", data_files={"train": "/home/shutty/data/mneg/data/train/train.jsonl.zst"}, split="train"
-    )
-    test = load_dataset("json", data_files={"test": "/home/shutty/data/mneg/data/test/test.jsonl.zst"}, split="test")
+    train = load_dataset_split(dataset_args.train_dataset, split="train")
+    test = load_dataset_split(dataset_args.eval_dataset, split="test")
 
     logger.info(f"Training parameters: {training_args}")
 
@@ -62,7 +59,7 @@ def main():
     trainer.add_callback(EvaluateFirstStepCallback())
     trainer.train()
 
-    model.save(path="./model-pretrain-infonce8-cos-warm")
+    model.save(path=training_args.output_dir)
 
 
 if __name__ == "__main__":

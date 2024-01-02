@@ -8,9 +8,9 @@ class TripletFormat(Format):
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
-        query_prefix: Optional[str],
-        doc_prefix: Optional[str],
-        neg_count: int,
+        query_prefix: Optional[str] = None,
+        doc_prefix: Optional[str] = None,
+        neg_count: int = 8,
     ) -> None:
         super().__init__(tokenizer, query_prefix, doc_prefix)
         self.neg_count = neg_count

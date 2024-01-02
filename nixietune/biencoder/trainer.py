@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
 from torch import nn
 from dataclasses import dataclass, field
-from datasets import Dataset, Features, Value
+from datasets import Dataset
 from nixietune.metrics import EvalMetrics
 from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
 import logging

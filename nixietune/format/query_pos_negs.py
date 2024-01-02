@@ -1,15 +1,16 @@
 from transformers import PreTrainedTokenizerBase
 from typing import Dict, List, Optional
 from nixietune.format import Format
+from datasets import Features, Value
 
 
 class QueryPosNegsFormat(Format):
     def __init__(
         self,
         tokenizer: PreTrainedTokenizerBase,
-        query_prefix: Optional[str],
-        doc_prefix: Optional[str],
-        neg_count: int,
+        query_prefix: Optional[str] = None,
+        doc_prefix: Optional[str] = None,
+        neg_count: int = 8,
     ) -> None:
         super().__init__(tokenizer, query_prefix, doc_prefix)
         self.neg_count = neg_count
@@ -34,3 +35,16 @@ class QueryPosNegsFormat(Format):
                     lengths.append(pos_tokens["input_ids"].size + length)
         result = {"features": docs, "length": lengths}
         return result
+
+    def schema(self, dtype: str) -> Features:
+        return Features(
+            {
+                "features": [
+                    {
+                        "input_ids": [Value(dtype)],
+                        "attention_mask": [Value("int8")],
+                    }
+                ],
+                "length": Value("int32"),
+            }
+        )
