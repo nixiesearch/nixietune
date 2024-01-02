@@ -89,7 +89,7 @@ class BiencoderTrainer(Trainer):
         args.label_names = ["label"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
-        self.print_raw_stats(train_dataset)
+        # self.print_raw_stats(train_dataset)
         if len(tokenizer) < 65536:
             dtype = "uint16"
         else:
@@ -104,7 +104,7 @@ class BiencoderTrainer(Trainer):
             desc="Tokenizing train dataset",
             features=self.processor.schema(dtype),
         )
-        self.print_tokenized_stats(train_processed)
+        # self.print_tokenized_stats(train_processed)
         eval_processed = eval_dataset.map(
             self.eval_processor.tokenize,
             batched=True,

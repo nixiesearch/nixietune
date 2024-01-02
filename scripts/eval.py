@@ -59,3 +59,7 @@ def main():
     model = SBERTModel(eval_args.model_name_or_path)
     evaluation = MTEB(tasks=["FiQA2018", "SciFact", "NFCorpus"])
     evaluation.run(model, output_folder=eval_args.result_path, batch_size=eval_args.batch_size, verbosity=2)
+
+
+if __name__ == "__main__":
+    main()
