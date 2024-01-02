@@ -9,7 +9,7 @@ import torch
 
 
 class InfoNCELoss(nn.Module):
-    def __init__(self, model: SentenceTransformer, temperature=0.1, reduction="mean", negative_mode="unpaired"):
+    def __init__(self, model: SentenceTransformer, temperature=0.003, reduction="mean", negative_mode="unpaired"):
         super().__init__()
         self.temperature = temperature
         self.reduction = reduction
@@ -21,7 +21,14 @@ class InfoNCELoss(nn.Module):
         queries = reps[0]
         positives = reps[1]
         negatives = torch.stack(reps[2:], dim=1)
-        return info_nce(queries, positives, negatives, negative_mode="paired")
+        return info_nce(
+            queries,
+            positives,
+            negatives,
+            temperature=self.temperature,
+            reduction=self.reduction,
+            negative_mode="paired",
+        )
 
 
 class InfoNCETarget(Target):

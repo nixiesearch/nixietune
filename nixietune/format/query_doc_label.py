@@ -2,6 +2,7 @@ from datasets import Features, Value
 from transformers import PreTrainedTokenizerBase
 from typing import Dict, List, Optional
 from nixietune.format import Format
+import numpy as np
 
 
 class QueryDocLabelFormat(Format):
@@ -10,8 +11,10 @@ class QueryDocLabelFormat(Format):
         tokenizer: PreTrainedTokenizerBase,
         query_prefix: Optional[str] = None,
         doc_prefix: Optional[str] = None,
+        neg_count: int = 8,
     ) -> None:
         super().__init__(tokenizer, query_prefix, doc_prefix)
+        self.neg_count = neg_count
 
     def tokenize(self, batch: Dict[str, List]) -> Dict[str, List]:
         token_cache = self.make_tokenized_cache(batch)
