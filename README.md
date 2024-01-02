@@ -45,13 +45,13 @@ Nixietune expects a specific JSONL input format for your documents:
 ```json
 {
     "query": "pizza",
-    "pos": [
-        {"doc": "Standard Serious Pizza", "score": 1.0},
-        {"doc": "60 Seconds to Napoli", "score": 1.0},
+    "positive": [
+        "Standard Serious Pizza",
+        "60 Seconds to Napoli",
     ],
-    "neg": [
-        {"doc": "Burgermeister", "score": 0.0},
-        {"doc": "Risa Chicken", "score": 0.0}
+    "negative": [
+        "Burgermeister",
+        "Risa Chicken",
     ]
 }
 ```
@@ -59,12 +59,8 @@ Nixietune expects a specific JSONL input format for your documents:
 The document schema can be described as:
 
 * `query`: required, string. An anchor search query for the whole group of documents.
-* `pos`: required, list[obj]. A one or more positive documents for the query above.
-* `pos.doc`: required, string. A document text.
-* `pos.score`: optional, float. On optional relevancy score for the document. If not present, all positive documents have an implicit score of `1.0`.
-* `neg`: optional, list[obj]. A zero or more negative documents for the query.
-* `neg.doc`: required, string. A document text.
-* `neg.score`: optional, float. On optional relevancy score for the document. If not present, all negative documents have an implicit score of `0.0`.
+* `pos`: required, list[string]. A one or more positive documents for the query above.
+* `neg`: optional, list[string]. A zero or more negative documents for the query.
 
 ### Run the training
 

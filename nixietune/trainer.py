@@ -4,11 +4,9 @@ from transformers import TrainingArguments, Trainer
 from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
 from dataclasses import dataclass, field
-from datasets import Dataset
+from datasets import Dataset, Features, Value
 from nixietune.metrics import EvalMetrics
-from nixietune.tokenize import QueryDocLabelTokenizer
 from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
@@ -92,13 +90,19 @@ class BiencoderTrainer(Trainer):
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
         self.print_raw_stats(train_dataset)
+        if len(tokenizer) < 65536:
+            dtype = "uint16"
+        else:
+            dtype = "uint32"
+        logger.info(f"Tokenizer vocab_size={len(tokenizer)}, using {dtype} for token encoding on disk cache")
         train_processed = train_dataset.map(
             self.processor.tokenize,
             batched=True,
             batch_size=128,
             num_proc=args.dataloader_num_workers,
-            remove_columns=["query", "pos", "neg"],
+            remove_columns=["query", "positive", "negative"],
             desc="Tokenizing train dataset",
+            features=self.processor.schema(dtype),
         )
         self.print_tokenized_stats(train_processed)
         eval_processed = eval_dataset.map(
@@ -106,8 +110,9 @@ class BiencoderTrainer(Trainer):
             batched=True,
             batch_size=128,
             num_proc=args.dataloader_num_workers,
-            remove_columns=["query", "pos", "neg"],
+            remove_columns=["query", "positive", "negative"],
             desc="Tokenizing test dataset",
+            features=self.eval_processor.schema(dtype),
         )
         bi_model = BiencoderModel(model)
         bi_model.warnings_issued["estimate_tokens"] = True
@@ -178,29 +183,13 @@ class BiencoderTrainer(Trainer):
         )
         return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")
 
-    def num_tokens(self, train_dl: DataLoader, max_steps: Optional[int] = None) -> int:
-        """
-        Helper to get number of tokens in a [`~torch.utils.data.DataLoader`] by enumerating dataloader.
-        """
-        train_tokens = 0
-        try:
-            for step, batch in enumerate(train_dl):
-                tokens = batch["input_ids"].numel()
-                if max_steps is not None:
-                    return tokens * max_steps
-                train_tokens += tokens
-            return train_tokens
-        except KeyError:
-            logger.warning("Cannot get num_tokens from dataloader")
-            return train_tokens
-
     def print_raw_stats(self, dataset: Dataset, samples: int = 5000) -> None:
         positives_per_query = []
         negatives_per_query = []
         for row in tqdm(islice(dataset, samples), desc="Collecting raw stats", total=samples):
-            pos = len(row["pos"])
+            pos = len(row["positive"])
             positives_per_query.append(pos)
-            neg = len(row["neg"])
+            neg = len(row["negative"])
             negatives_per_query.append(neg)
         ppq = np.percentile(positives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
         npq = np.percentile(negatives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])

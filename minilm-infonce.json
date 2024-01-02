@@ -1,25 +1,30 @@
 {
+    "seq_len": 160,
     "target": "infonce",
-    "train_dataset": "/home/shutty/data/esci/hf/train/*",
-    "eval_dataset": "/home/shutty/data/esci/hf/test/*",
-    "model_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
+    "train_dataset": "nixiesearch/amazon-esci-hardnegatives",
+    "eval_dataset": "nixiesearch/amazon-esci-hardnegatives",
+    "model_name_or_path": "./model-minilm-contrastive-asym-15p",
     "output_dir": "out",
     "num_train_epochs": 1,
     "seed": 33,
     "per_device_train_batch_size": 512,
-    "per_device_eval_batch_size": 256,
+    "per_device_eval_batch_size": 512,
     "fp16": true,
     "logging_dir": "logs",
     "gradient_checkpointing": true,
     "gradient_accumulation_steps": 1,
     "dataloader_num_workers": 14,
-    "eval_steps": 0.1,
-    "logging_steps": 0.1,
+    "eval_steps": 0.05,
+    "logging_steps": 0.05,
     "evaluation_strategy": "steps",
     "torch_compile": true,
     "report_to": [
         "wandb"
     ],
     "save_strategy": "epoch",
-    "num_negatives": 4
+    "num_negatives": 8,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: ",
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.05
 }

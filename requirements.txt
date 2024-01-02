@@ -9,3 +9,5 @@ torchmetrics==1.2.1
 datasets==2.16.0
 pytest
 wandb
+mteb==1.1.1
+beir==2.0.0
