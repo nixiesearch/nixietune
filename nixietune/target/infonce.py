@@ -9,7 +9,7 @@ import torch
 
 
 class InfoNCELoss(nn.Module):
-    def __init__(self, model: SentenceTransformer, temperature=0.003, reduction="mean", negative_mode="unpaired"):
+    def __init__(self, model: SentenceTransformer, temperature=0.05, reduction="mean", negative_mode="unpaired"):
         super().__init__()
         self.temperature = temperature
         self.reduction = reduction
@@ -44,7 +44,8 @@ class InfoNCETarget(Target):
         self.num_negs = num_negs
 
     def loss(self) -> nn.Module:
-        return InfoNCELoss(self.model)
+        return losses.MultipleNegativesRankingLoss(self.model)
+        # return InfoNCELoss(self.model)
 
     def process(self) -> Format:
         return QueryPosNegsFormat(self.tokenizer, self.query_prefix, self.doc_prefix, self.num_negs)
