@@ -2,7 +2,6 @@ from datasets import Features, Value
 from transformers import PreTrainedTokenizerBase
 from typing import Dict, List, Optional
 from nixietune.format import Format
-import numpy as np
 
 
 class QueryDocLabelFormat(Format):

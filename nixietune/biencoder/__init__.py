@@ -1,2 +1,2 @@
-from nixietune.biencoder.trainer import BiencoderTrainer
-from nixietune.biencoder.arguments import BiencoderTrainingArguments
+from nixietune.biencoder.trainer import BiencoderTrainer  # noqa: F401
+from nixietune.biencoder.arguments import BiencoderTrainingArguments  # noqa: F401

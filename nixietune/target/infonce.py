@@ -1,4 +1,4 @@
-from sentence_transformers import SentenceTransformer, losses
+from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizerBase
 from typing import Optional, Iterable, Dict
 from nixietune.format import Format, QueryPosNegsFormat

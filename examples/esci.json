@@ -8,7 +8,7 @@
     "output_dir": "out",
     "num_train_epochs": 1,
     "seed": 33,
-    "per_device_train_batch_size": 384,
+    "per_device_train_batch_size": 1024,
     "per_device_eval_batch_size": 512,
     "fp16": true,
     "logging_dir": "logs",
@@ -23,7 +23,7 @@
         "wandb"
     ],
     "save_strategy": "epoch",
-    "num_negatives": 32,
+    "num_negatives": 8,
     "lr_scheduler_type": "cosine",
     "warmup_ratio": 0.05,
     "learning_rate": 5e-5,
