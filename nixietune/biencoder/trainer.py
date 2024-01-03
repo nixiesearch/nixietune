@@ -1,13 +1,14 @@
 from transformers import PreTrainedModel
 from sentence_transformers import SentenceTransformer
-from transformers import TrainingArguments, Trainer
-from typing import List, Dict, Any, Union, Tuple, Optional
+from transformers import Trainer
+from typing import List, Dict, Any, Union, Tuple
 import torch
 from torch import nn
-from dataclasses import dataclass, field
+
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
 from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
+from nixietune.biencoder import BiencoderTrainingArguments
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
@@ -15,30 +16,6 @@ import numpy as np
 from itertools import islice
 
 logger = logging.getLogger()
-
-
-@dataclass
-class BiencoderTrainingArguments(TrainingArguments):
-    seq_len: int = field(
-        default=128,
-        metadata={"help": "Max sequence length in tokens."},
-    )
-
-    target: str = field(
-        default="infonce", metadata={"help": "Optimization target: cosine_similarity/contrastive/infonce"}
-    )
-
-    num_negatives: int = field(default=4, metadata={"help": "Number of negatives to use for InfoNCE/Triplet loss"})
-
-    triplet_margin: float = field(default=5, metadata={"help": "Margin value for Triplet loss"})
-
-    query_prefix: Optional[None] = field(
-        default=None, metadata={"help": "Prefix for all queries. Used for asymmetrical models like E5."}
-    )
-
-    document_prefix: Optional[None] = field(
-        default=None, metadata={"help": "Prefix for all documents. Used for asymmetrical models like E5."}
-    )
 
 
 class BiencoderModel(PreTrainedModel):

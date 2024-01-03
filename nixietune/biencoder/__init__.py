@@ -1,1 +1,2 @@
-from nixietune.biencoder.trainer import BiencoderTrainer, BiencoderTrainingArguments
+from nixietune.biencoder.trainer import BiencoderTrainer
+from nixietune.biencoder.arguments import BiencoderTrainingArguments
