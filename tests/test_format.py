@@ -1,5 +1,4 @@
 from datasets import load_dataset
-from nixietune.log import setup_logging
 from nixietune.format import TripletFormat, QueryDocLabelFormat, QueryPosNegsFormat
 from transformers import AutoTokenizer
 import pytest

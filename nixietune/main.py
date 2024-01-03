@@ -1,5 +1,4 @@
 import os
-import sys
 from sentence_transformers import SentenceTransformer
 from transformers.trainer_callback import TrainerControl, TrainerState
 from transformers.training_args import TrainingArguments

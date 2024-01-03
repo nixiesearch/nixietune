@@ -1,7 +1,4 @@
-from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
-from nixietune.format import Format, QueryDocLabelFormat, QueryPosNegsFormat, TripletFormat
-from nixietune.arguments import ModelArguments, DatasetArguments
-from datasets import DatasetDict, Dataset, load_dataset, Features, Value
+from datasets import Dataset, load_dataset, Features, Value
 import os
 from huggingface_hub.utils import validate_repo_id
 import logging
