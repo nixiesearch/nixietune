@@ -24,9 +24,19 @@ def test_dataset_load_split_file():
     assert len(ds) == 10
 
 
+def test_dataset_load_split_no_negatives():
+    ds = load_dataset_split("tests/data/noneg.jsonl.gz", split="train")
+    assert len(ds) == 10
+
+
+def test_dataset_load_split_file_limit():
+    ds = load_dataset_split("tests/data/dummy.jsonl.gz", split="train", samples=5)
+    assert len(ds) == 5
+
+
 def test_dataset_load_split_dir():
     ds = load_dataset_split("tests/data/", split="train")
-    assert len(ds) == 10
+    assert len(ds) == 20
 
 
 def test_dataset_load_split_hf():

@@ -1,14 +1,14 @@
 from transformers import PreTrainedModel
 from sentence_transformers import SentenceTransformer
 from transformers import Trainer
-from typing import List, Dict, Any, Union, Tuple
+from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
 from torch import nn
 
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
 from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
-from nixietune.biencoder import BiencoderTrainingArguments
+from nixietune.biencoder.arguments import BiencoderTrainingArguments
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
@@ -35,7 +35,7 @@ class BiencoderTrainer(Trainer):
         model: SentenceTransformer,
         args: BiencoderTrainingArguments,
         train_dataset: Dataset,
-        eval_dataset: Dataset,
+        eval_dataset: Optional[Dataset],
         eval_metrics: List[str] = ["ndcg@10"],
         **kwargs,
     ) -> None:
@@ -50,7 +50,13 @@ class BiencoderTrainer(Trainer):
                 self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
             case "infonce":
                 self.target = InfoNCETarget(
-                    model, tokenizer, args.num_negatives, args.query_prefix, args.document_prefix
+                    model,
+                    tokenizer,
+                    num_negs=args.num_negatives,
+                    query_prefix=args.query_prefix,
+                    doc_prefix=args.document_prefix,
+                    temperature=args.infonce_temperature,
+                    negative_mode=args.infonce_negative_mode,
                 )
             case "triplet":
                 self.target = TripletTarget(
@@ -82,15 +88,19 @@ class BiencoderTrainer(Trainer):
             features=self.processor.schema(dtype),
         )
         # self.print_tokenized_stats(train_processed)
-        eval_processed = eval_dataset.map(
-            self.eval_processor.tokenize,
-            batched=True,
-            batch_size=128,
-            num_proc=args.dataloader_num_workers,
-            remove_columns=["query", "positive", "negative"],
-            desc="Tokenizing test dataset",
-            features=self.eval_processor.schema(dtype),
-        )
+        if eval_dataset is not None:
+            eval_processed = eval_dataset.map(
+                self.eval_processor.tokenize,
+                batched=True,
+                batch_size=128,
+                num_proc=args.dataloader_num_workers,
+                remove_columns=["query", "positive", "negative"],
+                desc="Tokenizing test dataset",
+                features=self.eval_processor.schema(dtype),
+            )
+        else:
+            eval_processed = None
+            args.evaluation_strategy = "no"
         bi_model = BiencoderModel(model)
         bi_model.warnings_issued["estimate_tokens"] = True
         super().__init__(

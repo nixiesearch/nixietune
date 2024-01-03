@@ -20,5 +20,7 @@
     "torch_compile": true,
     "report_to": [],
     "save_strategy": "epoch",
-    "num_negatives": 8
+    "num_negatives": 8,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
 }

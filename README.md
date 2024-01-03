@@ -22,21 +22,17 @@ To fine-tune a semantic search embedding model on your data:
 
 ### Installation
 
-Nixietune is not yet published to PyPi, but you can install it from git:
+Nixietune is published to PyPi:
 
 ```bash
-# get the code
-git clone git@github.com:nixiesearch/nixietune.git
-cd nixietune
 # setup the environment
 python -m venv .venv && source .venv/bin/activate
 # install dependencies
-pip install -r requirements.txt
+pip install nixietune
 ```
 
-* Nixietune is tested with Python 3.11. 
+* Nixietune is tested with Python 3.10 and 3.11. 
 * 3.12 is not yet supported [by PyTorch](https://github.com/pytorch/pytorch/issues/110436)
-* Python 3.10 and earlier: use at your own risk.
 
 ### Data format
 
@@ -59,25 +55,29 @@ Nixietune expects a specific JSONL input format for your documents:
 The document schema can be described as:
 
 * `query`: required, string. An anchor search query for the whole group of documents.
-* `pos`: required, list[string]. A one or more positive documents for the query above.
-* `neg`: optional, list[string]. A zero or more negative documents for the query.
+* `positive`: required, list[string]. A one or more positive documents for the query above.
+* `negative`: optional, list[string]. A zero or more negative documents for the query.
+
+The `InfoNCE` loss supports negative-less training - when all the other in-batch positives are treated as negatives.
 
 ### Run the training
 
 Let's fine-tune a [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) embedding model on a [nixiesearch/ms-marco-hard-negatives](https://huggingface.co/datasets/nixiesearch/ms-marco-hard-negatives) dataset, using the InfoNCE loss. 
 
 ```shell
-python examples/train_msmarco.py examples/msmarco.json
+python -m nixietune examples/msmarco.json
 ```
 
 The [`msmarco.json`](examples/msmarco.json) configuration file is based on a HuggingFace Transformer TrainingArguments with some extra settings:
 
 ```json
 {
+    "train_dataset": "nixiesearch/ms-marco-hard-negatives",
+    "eval_dataset": "nixiesearch/ms_marco",
     "seq_len": 128,
     "target": "infonce",
     "model_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
-    "output_dir": "out",
+    "output_dir": "minilm-msmarco-infonce8",
     "num_train_epochs": 1,
     "seed": 33,
     "per_device_train_batch_size": 256,
@@ -87,17 +87,19 @@ The [`msmarco.json`](examples/msmarco.json) configuration file is based on a Hug
     "gradient_checkpointing": true,
     "gradient_accumulation_steps": 1,
     "dataloader_num_workers": 14,
-    "eval_steps": 0.1,
-    "logging_steps": 0.1,
+    "eval_steps": 0.05,
+    "logging_steps": 0.05,
     "evaluation_strategy": "steps",
     "torch_compile": true,
     "report_to": [],
     "save_strategy": "epoch",
-    "num_negatives": 8
+    "num_negatives": 8,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
 }
 ```
 
-It takes around 20 minutes to fine-tune an `all-MiniLM-L6-v2` on a MS MARCO hard negatives on a single RTX4090 GPU.
+It takes around 60 minutes to fine-tune an `all-MiniLM-L6-v2` on a MS MARCO hard negatives on a single RTX4090 GPU.
 
 ### Choosing the best parameters
 
@@ -109,6 +111,7 @@ The following training parameters are worth tuning:
 * `seq_len`: context length of the model. Usually it's around 128-160 for most models in MTEB leaderboard.
 * `gradient_checkpointing`: reduces VRAM usage sugnificantly (up to 70%) with a small 10% performance penalty, as we recompute gradients instead of storing them. If unsure, choose `true`
 * `num_negatives`: for `infonce`/`triplet` targets, how many negatives from the dataset to select.
+* `query_prefix` and `document_prefix`: prompt labels for asymmetric models - when the model can distinguish between query and document passages.
 
 ## License
 
