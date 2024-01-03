@@ -1,4 +1,4 @@
-from sentence_transformers import SentenceTransformer, losses
+from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizerBase
 from typing import Optional, Iterable, Dict
 from nixietune.format import Format, QueryPosNegsFormat
@@ -21,7 +21,7 @@ class InfoNCELoss(nn.Module):
         queries = reps[0]
         positives = reps[1]
         if self.negative_mode == "paired":
-            if len(reps) >= 2:
+            if len(reps) > 2:
                 negatives = torch.stack(reps[2:], dim=1)
             else:
                 raise ValueError("Cannot use paired InfoNCE loss with no negatives")
@@ -34,7 +34,7 @@ class InfoNCELoss(nn.Module):
                 negative_mode=self.negative_mode,
             )
         elif self.negative_mode == "unpaired":
-            if len(reps) >= 2:
+            if len(reps) > 2:
                 negatives = torch.cat(reps[2:])
             else:
                 negatives = None
