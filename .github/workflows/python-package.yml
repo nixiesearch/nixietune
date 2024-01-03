@@ -32,7 +32,7 @@ jobs:
         if [ -f pyproject.toml ]; then pip install .; fi
     - name: Lint with Ruff
       run: |
-        ruff --check
+        ruff check
     - name: Test with pytest
       run: |
         pytest
