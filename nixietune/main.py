@@ -31,12 +31,14 @@ def main(argv):
         dataset_args.train_dataset,
         split=dataset_args.train_split,
         samples=dataset_args.train_samples,
+        streaming=dataset_args.streaming,
     )
     if dataset_args.eval_dataset is not None:
         test = load_dataset_split(
             dataset_args.eval_dataset,
             split=dataset_args.eval_split,
             samples=dataset_args.eval_samples,
+            streaming=dataset_args.streaming,
         )
     else:
         test = None
@@ -44,10 +46,7 @@ def main(argv):
     logger.info(f"Training parameters: {training_args}")
 
     trainer = BiencoderTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train,
-        eval_dataset=test,
+        model=model, args=training_args, train_dataset=train, eval_dataset=test, streaming=dataset_args.streaming
     )
     if test is not None:
         trainer.add_callback(EvaluateFirstStepCallback())

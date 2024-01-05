@@ -24,6 +24,11 @@ def test_dataset_load_split_file():
     assert len(ds) == 10
 
 
+def test_dataset_load_split_file_stream():
+    ds = load_dataset_split("tests/data/dummy.jsonl.gz", split="train", streaming=True)
+    assert len(list(ds)) == 10
+
+
 def test_dataset_load_split_no_negatives():
     ds = load_dataset_split("tests/data/noneg.jsonl.gz", split="train")
     assert len(ds) == 10
@@ -42,3 +47,8 @@ def test_dataset_load_split_dir():
 def test_dataset_load_split_hf():
     ds = load_dataset_split("nixiesearch/ms-marco-dummy", split="train[:1%]")
     assert len(ds) == 10
+
+
+def test_dataset_load_split_hf_stream():
+    ds = load_dataset_split("nixiesearch/ms-marco-dummy", split="train", streaming=True)
+    assert len(list(ds)) == 1000
