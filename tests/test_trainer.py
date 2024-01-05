@@ -1,6 +1,10 @@
 from nixietune.main import main
 
 
+def test_esci_mixed():
+    main(["self", "tests/config/esci_mixed.json"])
+
+
 def test_esci_infonce():
     main(["self", "tests/config/esci_infonce.json"])
 
