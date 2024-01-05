@@ -6,3 +6,5 @@ wandb
 out
 logs
 dist
+experiments
+dist

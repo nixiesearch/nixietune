@@ -7,7 +7,7 @@ from torch import nn
 
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
-from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget
+from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget, MixedTarget
 from nixietune.biencoder.arguments import BiencoderTrainingArguments
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
@@ -48,6 +48,14 @@ class BiencoderTrainer(Trainer):
                 self.target = CosineSimilarityTarget(model, tokenizer, args.query_prefix, args.document_prefix)
             case "contrastive":
                 self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
+            case "mixed":
+                self.target = MixedTarget(
+                    model,
+                    tokenizer,
+                    num_negs=args.num_negatives,
+                    query_prefix=args.query_prefix,
+                    doc_prefix=args.document_prefix,
+                )
             case "infonce":
                 self.target = InfoNCETarget(
                     model,
@@ -98,6 +106,7 @@ class BiencoderTrainer(Trainer):
                 desc="Tokenizing test dataset",
                 features=self.eval_processor.schema(dtype),
             )
+            # self.print_tokenized_stats(eval_processed)
         else:
             eval_processed = None
             args.evaluation_strategy = "no"
