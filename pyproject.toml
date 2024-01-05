@@ -1,6 +1,6 @@
 [project]
 name = "nixietune"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
     { name="Grebennikov Roman", email="grv@dfdx.me" },
 ]
@@ -24,8 +24,6 @@ dependencies = [
     "torchmetrics==1.2.1",
     "datasets==2.16.1",
     "wandb",
-    "mteb==1.1.1",
-    "beir==2.0.0",
     "info-nce-pytorch"
 ]
 test = [

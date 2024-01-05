@@ -1,4 +1,4 @@
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from sentence_transformers import SentenceTransformer
 from transformers import Trainer
 from typing import List, Dict, Any, Union, Tuple, Optional
@@ -7,8 +7,15 @@ from torch import nn
 
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
-from nixietune.target import CosineSimilarityTarget, ContrastiveTarget, InfoNCETarget, TripletTarget, MixedTarget
+from nixietune.target import (
+    CosineSimilarityTarget,
+    ContrastiveTarget,
+    InfoNCETarget,
+    TripletTarget,
+    MixedTarget,
+)
 from nixietune.biencoder.arguments import BiencoderTrainingArguments
+from nixietune.format import Format
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
@@ -37,6 +44,7 @@ class BiencoderTrainer(Trainer):
         train_dataset: Dataset,
         eval_dataset: Optional[Dataset],
         eval_metrics: List[str] = ["ndcg@10"],
+        streaming: bool = False,
         **kwargs,
     ) -> None:
         self.eval_metrics = EvalMetrics(eval_metrics)
@@ -81,32 +89,24 @@ class BiencoderTrainer(Trainer):
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
         # self.print_raw_stats(train_dataset)
-        if len(tokenizer) < 65536:
-            dtype = "uint16"
-        else:
-            dtype = "uint32"
-        logger.info(f"Tokenizer vocab_size={len(tokenizer)}, using {dtype} for token encoding on disk cache")
-        train_processed = train_dataset.map(
-            self.processor.tokenize,
-            batched=True,
-            batch_size=128,
-            num_proc=args.dataloader_num_workers,
-            remove_columns=["query", "positive", "negative"],
-            desc="Tokenizing train dataset",
-            features=self.processor.schema(dtype),
+        train_processed = self.prepare_dataset(
+            train_dataset,
+            fmt=self.processor,
+            tokenizer=tokenizer,
+            name="train",
+            streaming=streaming,
+            num_workers=args.dataloader_num_workers,
         )
         # self.print_tokenized_stats(train_processed)
         if eval_dataset is not None:
-            eval_processed = eval_dataset.map(
-                self.eval_processor.tokenize,
-                batched=True,
-                batch_size=128,
-                num_proc=args.dataloader_num_workers,
-                remove_columns=["query", "positive", "negative"],
-                desc="Tokenizing test dataset",
-                features=self.eval_processor.schema(dtype),
+            eval_processed = self.prepare_dataset(
+                eval_dataset,
+                fmt=self.eval_processor,
+                tokenizer=tokenizer,
+                name="test",
+                streaming=streaming,
+                num_workers=args.dataloader_num_workers,
             )
-            # self.print_tokenized_stats(eval_processed)
         else:
             eval_processed = None
             args.evaluation_strategy = "no"
@@ -153,6 +153,35 @@ class BiencoderTrainer(Trainer):
             result.append({"sentence_embedding": se.clone()})
         return result
 
+    def prepare_dataset(
+        self,
+        dataset: Dataset,
+        fmt: Format,
+        tokenizer: PreTrainedTokenizerBase,
+        name: str,
+        streaming: bool,
+        num_workers: int,
+    ) -> Dataset:
+        if streaming is False:
+            dtype = "uint16" if len(tokenizer) < 65535 else "uint32"
+            processed = dataset.map(
+                fmt.tokenize,
+                batched=True,
+                batch_size=128,
+                num_proc=num_workers,
+                remove_columns=["query", "positive", "negative"],
+                desc=f"Tokenizing {name} dataset",
+                features=fmt.schema(dtype),
+            )
+        else:
+            processed = dataset.map(
+                fmt.tokenize,
+                batched=True,
+                batch_size=128,
+                remove_columns=["query", "positive", "negative"],
+            )
+        return processed
+
     def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, torch.Tensor]]:
         features = []
         for item in items:
@@ -166,8 +195,8 @@ class BiencoderTrainer(Trainer):
         result["features"] = padded_features
         if "label" in items[0]:
             result["label"] = torch.tensor([item["label"] for item in items])
-        else:
-            result["return_loss"] = True
+        # else:
+        #    result["return_loss"] = True
         return result
 
     def pad(self, docs: List[Dict[str, Any]]) -> BatchEncoding:

@@ -14,6 +14,7 @@ class DatasetArguments:
     eval_samples: Optional[int] = field(
         default=None, metadata={"help": "Number of rows to select from the eval split"}
     )
+    streaming: bool = field(default=False, metadata={"help": "Load dataset in streaming mode"})
 
 
 @dataclass
