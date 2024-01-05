@@ -6,7 +6,6 @@ from nixietune.target import Target
 from torch import nn, Tensor
 from info_nce import info_nce
 import torch
-import torch.nn.functional as F
 
 
 class MixedLoss(nn.Module):
