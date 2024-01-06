@@ -45,7 +45,10 @@ def main(argv):
         model=model, args=training_args, train_dataset=train, eval_dataset=test, streaming=dataset_args.streaming
     )
     if test is not None:
-        print(trainer.evaluate())
+        if trainer.is_deepspeed_enabled:
+            logger.info("Not running eval before train: deepspeed is enabled (and not yet fully initialized)")
+        else:
+            logger.info(trainer.evaluate())
         trainer.add_callback(EvaluateFirstStepCallback())
 
     trainer.train()
