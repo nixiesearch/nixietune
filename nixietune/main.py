@@ -9,10 +9,6 @@ from nixietune import load_dataset_split, ModelArguments, DatasetArguments
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
-    def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        if state.global_step == 0:
-            control.should_evaluate = True
-
     def on_epoch_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         control.should_evaluate = True
 
@@ -38,7 +34,7 @@ def main(argv):
             dataset_args.eval_dataset,
             split=dataset_args.eval_split,
             samples=dataset_args.eval_samples,
-            streaming=dataset_args.streaming,
+            streaming=False,
         )
     else:
         test = None
@@ -49,7 +45,9 @@ def main(argv):
         model=model, args=training_args, train_dataset=train, eval_dataset=test, streaming=dataset_args.streaming
     )
     if test is not None:
+        print(trainer.evaluate())
         trainer.add_callback(EvaluateFirstStepCallback())
+
     trainer.train()
 
     model.save(path=training_args.output_dir)

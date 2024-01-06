@@ -104,7 +104,7 @@ class BiencoderTrainer(Trainer):
                 fmt=self.eval_processor,
                 tokenizer=tokenizer,
                 name="test",
-                streaming=streaming,
+                streaming=False,
                 num_workers=args.dataloader_num_workers,
             )
         else:
@@ -112,6 +112,12 @@ class BiencoderTrainer(Trainer):
             args.evaluation_strategy = "no"
         bi_model = BiencoderModel(model)
         bi_model.warnings_issued["estimate_tokens"] = True
+        if args.max_steps == -1:
+            batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps * args.world_size
+            dataset_size = train_dataset.info.splits["train"].num_examples
+            args.max_steps = int(dataset_size / batch_size)
+            print("dataset {dataset_size} batch {batch_size}")
+
         super().__init__(
             args=args,
             model=bi_model,
