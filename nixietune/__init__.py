@@ -20,6 +20,6 @@ def load_dataset_split(path: str, split: str, samples: Optional[int] = None, str
     else:
         validate_repo_id(path)
         dataset = load_dataset(path, split=split, features=schema, streaming=streaming)
-    if samples is not None and streaming is False:
-        dataset = dataset.select(list(range(samples)))
+    if samples is not None:
+        dataset = dataset.take(samples)
     return dataset

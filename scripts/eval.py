@@ -57,7 +57,7 @@ def main():
         (eval_args,) = parser.parse_args_into_dataclasses()
 
     model = SBERTModel(eval_args.model_name_or_path)
-    evaluation = MTEB(tasks=["FiQA2018", "SciFact", "NFCorpus"])
+    evaluation = MTEB(tasks=["FiQA2018", "SciFact", "NFCorpus", "ArguAna", "QuoraRetrieval", "SCIDOCS","SciFact", "TRECCOVID", "Touche2020", "MSMARCO"])
     evaluation.run(model, output_folder=eval_args.result_path, batch_size=eval_args.batch_size, verbosity=2)
 
 
