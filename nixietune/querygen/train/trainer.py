@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import Optional
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig, LlamaTokenizer
 from nixietune.querygen.train.arguments import QueryGenArguments
