@@ -1,0 +1,13 @@
+sentence_transformers==2.2.2
+torch==2.1.2
+transformers==4.36.2
+zstandard
+accelerate==0.25.0
+torchmetrics==1.2.1
+datasets==2.16.1
+wandb
+info-nce-pytorch
+peft
+bitsandbytes
+evaluate
+trl<0.7.8

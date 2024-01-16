@@ -10,8 +10,9 @@ from typing import Optional
 logger = logging.getLogger()
 
 
-def load_dataset_split(path: str, split: str, samples: Optional[int] = None, streaming: bool = False) -> Dataset:
-    schema = Features({"query": Value("string"), "positive": [Value("string")], "negative": [Value("string")]})
+def load_dataset_split(
+    path: str, split: str, samples: Optional[int] = None, streaming: bool = False, schema: Optional[Features] = None
+) -> Dataset:
     if os.path.exists(path):
         if os.path.isdir(path):
             dataset = load_dataset("json", data_dir=path, split=split, features=schema, streaming=streaming)

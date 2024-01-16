@@ -1,6 +1,6 @@
 import sys
 from nixietune.log import setup_logging
-from nixietune.biencoder.main import main
+from nixietune.querygen.train.main import main
 
 setup_logging()
 
