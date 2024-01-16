@@ -24,7 +24,9 @@ dependencies = [
     "torchmetrics==1.2.1",
     "datasets==2.16.1",
     "wandb",
-    "info-nce-pytorch"
+    "info-nce-pytorch",
+    "peft",
+    "bitsandbytes"
 ]
 test = [
     "pytest"

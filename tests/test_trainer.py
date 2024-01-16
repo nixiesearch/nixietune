@@ -1,4 +1,4 @@
-from nixietune.main import main
+from nixietune.biencoder.main import main
 
 
 def test_esci_mixed():
