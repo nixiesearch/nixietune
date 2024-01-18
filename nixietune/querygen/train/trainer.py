@@ -28,11 +28,11 @@ class QueryGenTrainer(SFTTrainer):
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         tokenizer = LlamaTokenizer.from_pretrained(
-            model_id, add_eos_token=False, add_bos_token=False, use_fast=False, pad_token="<unk>", padding_side="right"
+            model_id, add_eos_token=False, add_bos_token=False, use_fast=False, pad_token="<unk>", padding_side="left"
         )
         tokenizer.pad_token = "<unk>"
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
-        tokenizer.padding_side = "right"
+        tokenizer.padding_side = "left"
         self.tokenizer = tokenizer
         # self.args.evaluation_strategy = "no" if eval_dataset is None
 
@@ -44,7 +44,9 @@ class QueryGenTrainer(SFTTrainer):
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb_config, torch_dtype=torch.bfloat16
+            model_id,
+            quantization_config=bnb_config,
+            torch_dtype=torch.bfloat16,
         )
 
         lora_config = LoraConfig(
@@ -73,5 +75,18 @@ class QueryGenTrainer(SFTTrainer):
             data_collator=DataCollatorForCompletionOnlyLM(response_template="query:", tokenizer=self.tokenizer),
         )
 
-    def _prepare_dataset(self, dataset, **kwargs):
+    def _prepare_dataset(
+        self,
+        dataset,
+        tokenizer,
+        packing,
+        dataset_text_field,
+        max_seq_length,
+        formatting_func,
+        num_of_sequences,
+        chars_per_token,
+        remove_unused_columns=True,
+        append_concat_token=True,
+        add_special_tokens=True,
+    ):
         return dataset
