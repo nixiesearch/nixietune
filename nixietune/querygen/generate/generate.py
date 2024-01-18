@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, BatchEncoding
+from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding
 import torch
 from datasets import Dataset, load_dataset
 from typing import Dict, List
