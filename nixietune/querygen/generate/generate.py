@@ -36,7 +36,6 @@ class QueryGenerator:
             args.model_name_or_path,
             device_map="auto",
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
             **model_kwargs,
         )
         self.model.eval()

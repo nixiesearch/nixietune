@@ -28,10 +28,7 @@ dependencies = [
     "peft",
     "bitsandbytes",
     "evaluate",
-    "trl",
-    "packaging",
-    "wheel",
-    "flash-attn"
+    "trl"
 ]
 test = [
     "pytest"
@@ -51,5 +48,5 @@ log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(linen
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 [build-system]
-requires = ["hatchling", "setuptools", "packaging", "wheel", "torch"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
