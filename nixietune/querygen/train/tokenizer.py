@@ -1,6 +1,6 @@
 from transformers import LlamaTokenizer
 from typing import Dict, List
-import random
+import numpy as np
 
 
 class DatasetTokenizer:
@@ -66,7 +66,7 @@ class DatasetTokenizer:
         return {"input_ids": inputs, "attention_mask": attmasks}
 
     def length_type(self, query: str) -> str:
-        if random.randint(100) < 50:
+        if np.random.randint(100) < 50:
             words = len(query.split())
             match words:
                 case x if x < 5:
@@ -79,7 +79,7 @@ class DatasetTokenizer:
             return ""
 
     def question_type(self, query: str) -> str:
-        if random.randint(100) < 50:
+        if np.random.randint(100) < 50:
             lowercase_query = query.lower()
             if any(lowercase_query.startswith(prefix) for prefix in self.question_kws):
                 return "question"
@@ -87,6 +87,3 @@ class DatasetTokenizer:
                 return "regular"
         else:
             return ""
-
-    def prompt(self, passage: str, query: str, modifier: str) -> str:
-        return f"passage: {passage} {modifier} query: {query}"

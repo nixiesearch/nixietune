@@ -16,17 +16,22 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "sentence_transformers==2.2.2",
-    "torch==2.1.2",
-    "transformers==4.36.2",
+    "sentence_transformers",
+    "torch",
+    "transformers",
     "zstandard",
-    "accelerate==0.25.0",
-    "torchmetrics==1.2.1",
-    "datasets==2.16.1",
+    "accelerate",
+    "torchmetrics",
+    "datasets",
     "wandb",
     "info-nce-pytorch",
     "peft",
-    "bitsandbytes"
+    "bitsandbytes",
+    "evaluate",
+    "trl",
+    "packaging",
+    "wheel",
+    "flash-attn"
 ]
 test = [
     "pytest"
