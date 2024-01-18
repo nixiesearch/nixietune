@@ -28,7 +28,7 @@ if __name__ == "__main__":
         padding_side="right",
     )
     tokenizer.save_pretrained(merge_args.out_path)
-    model = AutoModelForCausalLM.from_pretrained(merge_args.base_model, torch_dtype=torch.float16)
+    model = AutoModelForCausalLM.from_pretrained(merge_args.base_model, torch_dtype=torch.bfloat16)
     model = PeftModel.from_pretrained(model, merge_args.adapter_path)
     model = model.merge_and_unload()
     model.save_pretrained(merge_args.out_path)

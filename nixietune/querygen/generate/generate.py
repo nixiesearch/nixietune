@@ -3,6 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding
 import torch
 from datasets import Dataset, load_dataset
 from typing import Dict, List
+from nixietune.format.trec import TRECDatasetReader
 
 
 @dataclass
@@ -41,7 +42,8 @@ class QueryGenerator:
         self.model.eval()
 
     def generate(self, input: str) -> Dataset:
-        dataset = load_dataset("json", data_dir=input, split="train")
+        trec = TRECDatasetReader(input)
+        dataset = trec.corpus().select_columns(["text"])
         processed = dataset.map(function=self.process_batch, batched=True, batch_size=16)
         return processed
 
@@ -49,9 +51,9 @@ class QueryGenerator:
         query = self.tokenizer(f" {self.args.prompt_modifier} query: ", padding=False)
         query_input_ids = query["input_ids"]
         tokenized_passages = self.tokenizer(
-            batch["passage"], padding=False, max_length=self.args.seq_len, truncation=True
+            batch["text"], padding=False, max_length=self.args.seq_len, truncation=True
         )
-        max_doc_len = self.args.seq_len - len(query_input_ids) - 2
+        max_doc_len = self.args.seq_len - len(query_input_ids) - 1
         passages_inputs = []
         passages_attmasks = []
         for tp in tokenized_passages["input_ids"]:
@@ -67,5 +69,9 @@ class QueryGenerator:
         outputs = self.model.generate(
             **padded, max_new_tokens=self.args.max_new_tokens, pad_token_id=self.tokenizer.pad_token_id
         )
-        decoded = self.tokenizer.batch_decode(outputs)
-        return {"passage": batch["passage"], "query": decoded}
+        decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        queries = []
+        for out in decoded:
+            pos = out.index("query: ")
+            queries.append(out[pos + 7 :])
+        return {"text": batch["text"], "query": queries}

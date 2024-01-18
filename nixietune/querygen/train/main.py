@@ -6,6 +6,7 @@ from nixietune.querygen.train.arguments import QueryGenArguments
 from transformers import HfArgumentParser, TrainerCallback
 import logging
 from nixietune import load_dataset_split, ModelArguments, DatasetArguments
+from nixietune.format.trec import TRECDatasetReader
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
@@ -21,21 +22,13 @@ def main(argv):
     else:
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
-    train = load_dataset_split(
-        dataset_args.train_dataset,
-        split=dataset_args.train_split,
-        samples=dataset_args.train_samples,
-        streaming=dataset_args.streaming,
-        schema=None,
-    )
+    trt = TRECDatasetReader(dataset_args.train_dataset)
+    train = trt.join_query_doc_score(corpus=trt.corpus(), queries=trt.queries(), qrels=trt.qrels("qrels.tsv"))
+    train = train.select_columns(["query", "passage"])
     if dataset_args.eval_dataset is not None:
-        test = load_dataset_split(
-            dataset_args.eval_dataset,
-            split=dataset_args.eval_split,
-            samples=dataset_args.eval_samples,
-            streaming=False,
-            schema=None,
-        )
+        tet = TRECDatasetReader(dataset_args.eval_dataset)
+        test = trt.join_query_doc_score(corpus=tet.corpus(), queries=tet.queries(), qrels=tet.qrels("qrels.tsv"))
+        test = test.select_columns(["query", "passage"])
     else:
         test = None
 

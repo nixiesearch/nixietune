@@ -80,8 +80,10 @@ class DatasetTokenizer:
 
     def question_type(self, query: str) -> str:
         if np.random.randint(100) < 50:
-            lowercase_query = query.lower()
+            lowercase_query = query.lower().strip()
             if any(lowercase_query.startswith(prefix) for prefix in self.question_kws):
+                return "question"
+            elif lowercase_query.endswith("?"):
                 return "question"
             else:
                 return "regular"
