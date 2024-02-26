@@ -1,5 +1,5 @@
-from datasets import Dataset, load_dataset
-from typing import Optional, Dict, List
+from datasets import Dataset, load_dataset, Sequence, Value, Features
+from typing import Iterator, Optional, Dict, List, Any
 from transformers import PreTrainedTokenizerBase
 from dataclasses import dataclass
 from nixietune.log import setup_logging
@@ -7,85 +7,91 @@ import logging
 import csv
 import json
 from pathlib import Path
+import os
 
 setup_logging()
 logger = logging.getLogger()
 
 
-class TRECDatasetReader:
-    def __init__(self, path: str, tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
-        self.path = path
-        self.tokenizer = tokenizer
+class TRECDataset:
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        corpus: Dataset,
+        queries: Dataset,
+        qrels: Dataset,
+        max_length: int = 526,
+    ) -> None:
+        def tokenize_dataset(ds: Dataset, fields: List[str] = ["text"]) -> tuple[Dataset, Dict[str, int]]:
+            tok = TokenizerCallable(tokenizer=tokenizer, fields=fields, max_length=max_length)
+            result = ds.map(function=tok.tokenize_batch, batched=True)
+            result = result.select_columns(["_id", "text", "input_ids"])
+            index = {key: index for index, key in enumerate(result["_id"])}
+            return result, index
 
-    def corpus(
-        self, subpath: str = "corpus.jsonl", max_length: int = 256, fields: List[str] = ["title", "text"]
-    ) -> Dataset:
-        return self._load_dict(subpath=subpath, max_length=max_length, fields=fields)
+        self.corpus, self.corpus_index = tokenize_dataset(
+            ds=corpus, fields=[field for field in corpus.column_names if field != "_id"]
+        )
+        self.queries, self.queries_index = tokenize_dataset(ds=queries)
+        self.qrels = qrels
+        logger.info(
+            f"Loaded TREC dataset: corpus={len(self.corpus_index)} queries={len(self.queries_index)} qrels={len(qrels)}"
+        )
 
-    def queries(self, subpath: str = "queries.jsonl", max_length=128) -> Dataset:
-        return self._load_dict(subpath=subpath, max_length=max_length, fields=["text"])
+    def as_tokenized_pairs(self) -> Dataset:
+        def join(qrel: Dict[str, str]) -> Dict[str, Any]:
+            qrel["query"] = self.queries[self.queries_index[qrel["query-id"]]]["input_ids"]
+            qrel["doc"] = self.corpus[self.corpus_index[qrel["corpus-id"]]]["input_ids"]
+            qrel["label"] = float(qrel["score"])
+            return qrel
 
-    def qrels(self, subpath: str) -> Dataset:
-        ds = load_dataset("csv", data_files={"train": f"{self.path}/{subpath}"}, split="train", sep="\t")
-        return ds
+        result = self.qrels.map(function=join)
+        schema = Features(
+            {"query": Sequence(Value("int64")), "doc": Sequence(Value("int64")), "label": Value("double")}
+        )
+        return result.select_columns(["query", "doc", "label"]).cast(features=schema)
 
-    def join_query_doc_score(self, corpus: Dataset, queries: Dataset, qrels: Dataset) -> Dataset:
-        joiner = QueryDocScoreJoiner(docs=corpus.to_dict(), queries=queries.to_dict())
-        joined = qrels.map(function=joiner.join, batched=True)
-        return joined.select_columns(["query", "passage", "label"])
+    def as_tokenized_triplets(self, threshold: float = 0.5) -> Dataset:
+        qrels_pos: Dict[str, List[str]] = {}
+        qrels_neg: Dict[str, List[str]] = {}
+        for q, doc, label in zip(self.qrels["query-id"], self.qrels["corpus-id"], self.qrels["score"]):
+            if float(label) > threshold:
+                qrels_pos[q] = qrels_pos.get(q, []) + [doc]
+            else:
+                qrels_neg[q] = qrels_neg.get(q, []) + [doc]
 
-    def _load_dict(self, subpath: str, max_length: int, fields: List[str]) -> Dataset:
-        ds = load_dataset("json", data_files={"train": f"{self.path}/{subpath}"}, split="train")
-        if self.tokenizer is not None:
-            tok = TokenizerCallable(tokenizer=self.tokenizer, fields=fields, max_length=max_length)
-            ds = ds.map(function=tok.tokenize_batch, batched=True)
-        ds = ds.select_columns(["_id", "text"])
-        return ds
+        def generate():
+            for q in self.qrels["query-id"]:
+                query = self.queries[self.queries_index[q]]["input_ids"]
+                pos = [self.corpus[self.corpus_index[doc]]["input_ids"] for doc in qrels_pos.get(q, [])]
+                neg = [self.corpus[self.corpus_index[doc]]["input_ids"] for doc in qrels_neg.get(q, [])]
+                yield {"query": query, "pos": pos, "neg": neg}
 
+        schema = Features(
+            {
+                "query": Sequence(Value("int64")),
+                "pos": Sequence(Sequence(Value("int64"))),
+                "neg": Sequence(Sequence(Value("int64"))),
+            }
+        )
+        return Dataset.from_generator(generator=generate, features=schema)
 
-class TRECDatasetWriter:
-    @classmethod
-    def save(self, ds: Dataset, path: str):
-        data_dict = ds.to_dict()
-        docs = {}
-        queries = {}
-        Path(f"{path}/qrels/").mkdir(parents=True, exist_ok=True)
-
-        with open(f"{path}/qrels/train.tsv", "w") as qrel_file:
-            qrel_csv = csv.writer(qrel_file, delimiter="\t")
-            qrel_csv.writerow(["query-id", "corpus-id", "score"])
-            for doc, query in zip(data_dict["text"], data_dict["query"]):
-                if doc not in docs:
-                    docs[doc] = len(docs)
-                if query not in queries:
-                    queries[query] = len(query)
-                qrel_csv.writerow([queries[query], docs[doc], 1])
-
-        with open(f"{path}/corpus.jsonl", "w") as corpus_file:
-            for doc, id in docs.items():
-                corpus_file.write(json.dumps({"_id": id, "text": doc}) + "\n")
-
-        with open(f"{path}/queries.jsonl", "w") as queries_file:
-            for q, id in queries.items():
-                queries_file.write(json.dumps({"_id": id, "text": q}) + "\n")
-
-
-class QueryDocScoreJoiner:
-    def __init__(self, docs: Dict[str, List[str]], queries: Dict[str, List[str]]) -> None:
-        def unwrap(data: Dict[str, List[str]]) -> Dict[str, str]:
-            result = {}
-            for id, text in zip(data["_id"], data["text"]):
-                result[id] = text
-            return result
-
-        self.docs = unwrap(docs)
-        self.queries = unwrap(queries)
-
-    def join(self, batch: Dict[str, List[str]]) -> Dict[str, List[str]]:
-        doc_texts = [self.docs[id] for id in batch["corpus-id"]]
-        query_texts = [self.queries[id] for id in batch["query-id"]]
-        scores = [float(s) for s in batch["score"]]
-        return {"query": query_texts, "passage": doc_texts, "label": scores}
+    @staticmethod
+    def from_dir(
+        path: str,
+        tokenizer: PreTrainedTokenizerBase,
+        corpus_file: str = "corpus.jsonl",
+        queries_file: str = "queries.jsonl",
+        qrel_file: str = os.path.join("qrels", "train.tsv"),
+    ):
+        corpus = load_dataset("json", data_files={"train": os.path.join(path, corpus_file)}, split="train")
+        queries = load_dataset("json", data_files={"train": os.path.join(path, queries_file)}, split="train")
+        qrels = load_dataset("csv", data_files={"train": os.path.join(path, qrel_file)}, split="train", delimiter="\t")
+        logger.info(f"Loading TREC dataset from local path {path}")
+        logger.info(f"Corpus schema: {corpus.features}")
+        logger.info(f"Query schema: {queries.features}")
+        logger.info(f"QRel schema: {qrels.features}")
+        return TRECDataset(tokenizer, corpus, queries, qrels)
 
 
 @dataclass
@@ -102,5 +108,4 @@ class TokenizerCallable:
                 text = f"{text} {col}" if col != "" else text
             merged.append(text)
         output = self.tokenizer(merged, padding=False, truncation=True, max_length=self.max_length)
-        batch["text"] = output["input_ids"]
-        return batch
+        return {"_id": batch["_id"], "text": merged, "input_ids": output["input_ids"]}

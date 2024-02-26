@@ -5,7 +5,7 @@ from nixietune.querygen.train.trainer import QueryGenTrainer
 from nixietune.querygen.train.arguments import QueryGenArguments
 from transformers import HfArgumentParser, TrainerCallback
 import logging
-from nixietune import load_dataset_split, ModelArguments, DatasetArguments
+from nixietune import ModelArguments, DatasetArguments
 from nixietune.format.trec import TRECDatasetReader
 
 

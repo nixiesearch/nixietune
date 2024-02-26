@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
-from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding
+from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding, GenerationConfig
 import torch
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from typing import Dict, List
-from nixietune.format.trec import TRECDatasetReader
+from nixietune.format.trec import TRECDataset
 
 
 @dataclass
@@ -42,13 +42,13 @@ class QueryGenerator:
         self.model.eval()
 
     def generate(self, input: str) -> Dataset:
-        trec = TRECDatasetReader(input)
-        dataset = trec.corpus().select_columns(["text"])
-        processed = dataset.map(function=self.process_batch, batched=True, batch_size=16)
+        trec = TRECDataset.from_dir(input)
+        dataset = trec.corpus.select_columns(["text", "_id"])
+        processed = dataset.map(function=self.process_batch, batched=True, batch_size=24)
         return processed
 
     def process_batch(self, batch: Dict[str, List[str]]) -> Dict[str, List[str]]:
-        query = self.tokenizer(f" {self.args.prompt_modifier} query: ", padding=False)
+        query = self.tokenizer(f" {self.args.prompt_modifier} query:", padding=False)  # no space at end!
         query_input_ids = query["input_ids"]
         tokenized_passages = self.tokenizer(
             batch["text"], padding=False, max_length=self.args.seq_len, truncation=True
@@ -66,12 +66,16 @@ class QueryGenerator:
         padded = self.tokenizer.pad(
             encoded, max_length=self.args.seq_len, pad_to_multiple_of=8, return_tensors="pt"
         ).to(self.model.device)
-        outputs = self.model.generate(
-            **padded, max_new_tokens=self.args.max_new_tokens, pad_token_id=self.tokenizer.pad_token_id
+        config = GenerationConfig(
+            max_new_tokens=self.args.max_new_tokens,
+            pad_token_id=self.tokenizer.pad_token_id,
+            bos_token_id=self.tokenizer.bos_token_id,
+            eos_token_id=self.tokenizer.eos_token_id,
         )
+        outputs = self.model.generate(**padded, generation_config=config)
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         queries = []
         for out in decoded:
             pos = out.index("query: ")
             queries.append(out[pos + 7 :])
-        return {"text": batch["text"], "query": queries}
+        return {"text": batch["text"], "query": queries, "_id": batch["_id"]}

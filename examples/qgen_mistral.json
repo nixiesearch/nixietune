@@ -1,6 +1,6 @@
 {
-    "train_dataset": "/home/shutty/data/nixiesearch-datasets/query-doc/trec/train",
-    "eval_dataset": "/home/shutty/data/nixiesearch-datasets/query-doc/trec/test",
+    "train_dataset": "/home/shutty/data/nixiesearch-datasets/query-doc/data/train",
+    "eval_dataset": "/home/shutty/data/nixiesearch-datasets/query-doc/data/test",
     "seq_len": 512,
     "model_name_or_path": "mistralai/Mistral-7B-v0.1",
     "output_dir": "mistral-qgen",
@@ -13,8 +13,8 @@
     "gradient_checkpointing": true,
     "gradient_accumulation_steps": 1,
     "dataloader_num_workers": 14,
-    "eval_steps": 0.001,
-    "logging_steps": 0.001,
+    "eval_steps": 0.03,
+    "logging_steps": 0.03,
     "evaluation_strategy": "steps",
     "torch_compile": false,
     "report_to": [
