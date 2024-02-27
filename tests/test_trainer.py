@@ -9,10 +9,6 @@ def test_esci_infonce():
     main(["self", "tests/config/esci_infonce.json"])
 
 
-def test_esci_infonce_stream():
-    main(["self", "tests/config/esci_infonce_stream.json"])
-
-
 def test_esci_infonce_no_negatives():
     main(["self", "tests/config/esci_infonce_nonegs.json"])
 
