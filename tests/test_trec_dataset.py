@@ -2,8 +2,6 @@ from nixietune.format.trec import TRECDataset
 from transformers import AutoTokenizer
 from nixietune.log import setup_logging
 import logging
-from datasets import Dataset
-from typing import Dict, List
 
 setup_logging()
 logger = logging.getLogger()

@@ -1,6 +1,5 @@
 from sentence_transformers import SentenceTransformer
-from transformers import PreTrainedTokenizerBase
-from typing import Optional, Iterable, Dict
+from typing import Iterable, Dict
 from torch import nn, Tensor
 from info_nce import info_nce
 import torch

@@ -1,12 +1,11 @@
 from datasets import Dataset, load_dataset, Sequence, Value, Features, DatasetDict
-from typing import Iterator, Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any
 from transformers import PreTrainedTokenizerBase
 from dataclasses import dataclass
 from nixietune.log import setup_logging
 import logging
 import os
 import pandas as pd
-from tqdm import tqdm
 
 setup_logging()
 logger = logging.getLogger()

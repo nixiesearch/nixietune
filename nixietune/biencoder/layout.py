@@ -1,6 +1,5 @@
 from typing import Dict, List, Any
 from dataclasses import dataclass
-import numpy as np
 import random
 from datasets import Features, Sequence, Value
 

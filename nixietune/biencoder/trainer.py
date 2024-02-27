@@ -1,11 +1,11 @@
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from sentence_transformers import SentenceTransformer, losses
 from transformers import Trainer
-from typing import List, Dict, Any, Union, Tuple, Optional, Callable
+from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
 from torch import nn
 
-from datasets import Dataset, Features, Value, Sequence
+from datasets import Dataset
 from nixietune.metrics import EvalMetrics
 from nixietune.biencoder.arguments import BiencoderTrainingArguments
 import logging

@@ -7,7 +7,6 @@ from transformers import HfArgumentParser, TrainerCallback, AutoTokenizer
 import logging
 from nixietune import ModelArguments, DatasetArguments
 from nixietune.format.trec import TRECDataset
-from datasets import Features, Value
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
