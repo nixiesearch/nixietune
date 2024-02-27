@@ -1,14 +1,15 @@
 {
     "seq_len": 128,
     "target": "infonce",
-    "train_dataset": "nixiesearch/amazon-esci-hardnegatives",
-    "eval_dataset": "nixiesearch/amazon-esci-hardnegatives",
-    "eval_split": "test[:30%]",
+    "train_dataset": "/home/shutty/data/beir/trec-covid",
+    "eval_dataset": "/home/shutty/data/beir/trec-covid",
+    "train_split": "test",
+    "eval_split": "test",
     "model_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
     "output_dir": "out",
     "num_train_epochs": 1,
     "seed": 33,
-    "per_device_train_batch_size": 1024,
+    "per_device_train_batch_size": 512,
     "per_device_eval_batch_size": 512,
     "fp16": true,
     "logging_dir": "logs",
@@ -26,7 +27,5 @@
     "num_negatives": 8,
     "lr_scheduler_type": "cosine",
     "warmup_ratio": 0.05,
-    "learning_rate": 5e-5,
-    "query_prefix": "query: ",
-    "document_prefix": "passage: "
+    "learning_rate": 5e-5
 }

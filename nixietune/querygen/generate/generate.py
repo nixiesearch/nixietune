@@ -42,21 +42,18 @@ class QueryGenerator:
         self.model.eval()
 
     def generate(self, input: str) -> Dataset:
-        trec = TRECDataset.from_dir(input)
-        dataset = trec.corpus.select_columns(["text", "_id"])
-        processed = dataset.map(function=self.process_batch, batched=True, batch_size=24)
+        corpus = TRECDataset.corpus_from_dir(input, self.tokenizer).corpus.select_columns(["text", "_id", "input_ids"])
+        processed = corpus.map(function=self.process_batch, batched=True, batch_size=24)
         return processed
 
     def process_batch(self, batch: Dict[str, List[str]]) -> Dict[str, List[str]]:
         query = self.tokenizer(f" {self.args.prompt_modifier} query:", padding=False)  # no space at end!
         query_input_ids = query["input_ids"]
-        tokenized_passages = self.tokenizer(
-            batch["text"], padding=False, max_length=self.args.seq_len, truncation=True
-        )
+        tokenized_passages = batch["input_ids"]
         max_doc_len = self.args.seq_len - len(query_input_ids) - 1
         passages_inputs = []
         passages_attmasks = []
-        for tp in tokenized_passages["input_ids"]:
+        for tp in tokenized_passages:
             passage = (
                 [self.tokenizer.bos_token_id] + tp[:max_doc_len] + query_input_ids
             )  # no eos, as we expect to continue the generation

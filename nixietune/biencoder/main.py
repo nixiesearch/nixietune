@@ -3,9 +3,10 @@ from sentence_transformers import SentenceTransformer
 from transformers.trainer_callback import TrainerControl, TrainerState
 from transformers.training_args import TrainingArguments
 from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
-from transformers import HfArgumentParser, TrainerCallback
+from transformers import HfArgumentParser, TrainerCallback, AutoTokenizer
 import logging
-from nixietune import load_dataset_split, ModelArguments, DatasetArguments
+from nixietune import ModelArguments, DatasetArguments
+from nixietune.format.trec import TRECDataset
 from datasets import Features, Value
 
 
@@ -23,30 +24,44 @@ def main(argv):
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     device = "cpu" if training_args.use_cpu else "cuda"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     model = SentenceTransformer(model_args.model_name_or_path, device=device)
-    schema = Features({"query": Value("string"), "positive": [Value("string")], "negative": [Value("string")]})
-    train = load_dataset_split(
-        dataset_args.train_dataset,
-        split=dataset_args.train_split,
-        samples=dataset_args.train_samples,
-        streaming=dataset_args.streaming,
-        schema=schema,
-    )
-    if dataset_args.eval_dataset is not None:
-        test = load_dataset_split(
-            dataset_args.eval_dataset,
-            split=dataset_args.eval_split,
-            samples=dataset_args.eval_samples,
-            streaming=False,
-            schema=schema,
+    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, use_fast=True)
+    if dataset_args.train_dataset == dataset_args.eval_dataset:
+        train = TRECDataset.from_dir(
+            path=dataset_args.train_dataset,
+            tokenizer=tokenizer,
+            qrel_splits=[dataset_args.train_split, dataset_args.eval_split],
+            max_length=training_args.seq_len,
         )
+        test = train
     else:
-        test = None
+        train = TRECDataset.from_dir(
+            path=dataset_args.train_dataset,
+            tokenizer=tokenizer,
+            qrel_splits=[dataset_args.train_split],
+            max_length=training_args.seq_len,
+        )
+        if (dataset_args.eval_dataset) is not None:
+            test = TRECDataset.from_dir(
+                path=dataset_args.train_dataset,
+                tokenizer=tokenizer,
+                qrel_splits=[dataset_args.test_split],
+                max_length=training_args.seq_len,
+            )
+        else:
+            test = None
 
     logger.info(f"Training parameters: {training_args}")
 
     trainer = BiencoderTrainer(
-        model=model, args=training_args, train_dataset=train, eval_dataset=test, streaming=dataset_args.streaming
+        model=model,
+        tokenizer=tokenizer,
+        args=training_args,
+        train_dataset=train,
+        eval_dataset=test,
+        train_split=dataset_args.train_split,
+        eval_split=dataset_args.eval_split,
     )
     if test is not None:
         if trainer.is_deepspeed_enabled:

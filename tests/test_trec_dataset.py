@@ -9,47 +9,22 @@ setup_logging()
 logger = logging.getLogger()
 
 
-def test_pairs():
+def test_corpus():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    ds = TRECDataset.from_dir(path="tests/data/trec", tokenizer=tokenizer)
-    joined = ds.as_tokenized_pairs().to_dict()
-    assert len(joined["query"]) == 4
+    ds = TRECDataset.corpus_from_dir(path="tests/data/trec", tokenizer=tokenizer)
+    assert len(ds.to_dict()["_id"]) == 4
 
 
 def test_triplets():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     ds = TRECDataset.from_dir(path="tests/data/trec", tokenizer=tokenizer)
-    joined = ds.as_tokenized_triplets()
+    joined = ds.load_split(split="train")
     logger.info(joined.features)
-    assert len(joined.to_dict()["query"]) == 4
+    assert len(joined.to_dict()["query"]) == 2
 
 
-# def test_join_qpn():
-#     ds = TRECDatasetReader("tests/data/trec")
-#     joined = ds.join_query_pos_neg(ds.corpus(), ds.queries(), ds.qrels("qrels/train.tsv")).to_dict()
-#     assert len(joined["query"]) == 4
-
-
-# def test_corpus_load():
-#     ds = TRECDatasetReader("tests/data/trec")
-#     corpus = ds.corpus().to_dict()
-#     assert len(corpus["_id"]) == 4
-
-
-# def test_query_load():
-#     ds = TRECDatasetReader("tests/data/trec")
-#     q = ds.queries().to_dict()
-#     assert len(q["_id"]) == 2
-
-
-# def test_corpus_load_tokenized():
-#     tokenizer = LlamaTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
-#     ds = TRECDatasetReader("tests/data/trec", tokenizer=tokenizer)
-#     corpus = ds.corpus().to_dict()
-#     assert len(corpus["_id"]) == 4
-
-
-# def test_qrel_load():
-#     ds = TRECDatasetReader("tests/data/trec")
-#     q = ds.qrels("qrels/train.tsv").to_dict()
-#     assert q["query-id"] == ["PLAIN-1", "PLAIN-1", "PLAIN-2", "PLAIN-2"]
+# def test_triplets2():
+#     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+#     ds = TRECDataset.from_dir(path="/home/shutty/data/beir/trec-covid", tokenizer=tokenizer, qrel_splits=["test"])
+#     joined = ds.load_split(split="test")
+#     assert len(joined.to_dict()["query-id"]) == 50
