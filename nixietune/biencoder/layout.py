@@ -2,6 +2,9 @@ from typing import Dict, List, Any
 from dataclasses import dataclass
 import random
 from datasets import Features, Sequence, Value
+import logging
+
+logger = logging.getLogger()
 
 
 class Layout:
@@ -49,7 +52,11 @@ class QueryPosNegsLayout(Layout):
         for query, docs, scores in zip(batch["query"], batch["docs"], batch["scores"]):
             positives = [doc for doc, score in zip(docs, scores) if score >= self.positive_threshold]
             negatives = [doc for doc, score in zip(docs, scores) if score < self.positive_threshold]
-            for pos in positives:
-                neg_sample = random.choices(negatives, k=self.num_negatives)
-                features.append([query, pos] + neg_sample)
+            if self.num_negatives > 0 and len(negatives) > 0:
+                for pos in positives:
+                    neg_sample = random.choices(negatives, k=self.num_negatives)
+                    features.append([query, pos] + neg_sample)
+            elif self.num_negatives == 0:
+                for pos in positives:
+                    features.append([query, pos])
         return {"features": features}

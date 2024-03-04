@@ -49,8 +49,14 @@ class BiencoderTrainer(Trainer):
         tokenizer.model_max_length = args.seq_len
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         match args.target:
-            case "cosine_similarity":
+            case "cosine":
                 self.loss = losses.CosineSimilarityLoss(model)
+                self.format = QueryDocLabelLayout()
+            case "angle":
+                self.loss = losses.AnglELoss(model)
+                self.format = QueryDocLabelLayout()
+            case "cosent":
+                self.loss = losses.CoSENTLoss(model)
                 self.format = QueryDocLabelLayout()
             case "infonce":
                 self.loss = InfoNCELoss(

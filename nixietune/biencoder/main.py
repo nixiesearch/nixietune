@@ -61,6 +61,7 @@ def main(argv):
         eval_dataset=test,
         train_split=dataset_args.train_split,
         eval_split=dataset_args.eval_split,
+        eval_metrics=training_args.eval_metrics,
     )
     if test is not None:
         if trainer.is_deepspeed_enabled:
