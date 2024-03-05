@@ -8,6 +8,8 @@ import logging
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 import os
 from nixietune.querygen.train.tokenizer import DatasetTokenizer
+from nixietune.arguments import DatasetArguments
+from nixietune.format.json import JSONDataset
 
 logger = logging.getLogger()
 
@@ -17,15 +19,13 @@ class QueryGenTrainer(SFTTrainer):
         self,
         model_id: str,
         args: QueryGenArguments,
-        train_dataset: Dataset,
-        eval_dataset: Optional[Dataset],
+        dataset_args: DatasetArguments,
         **kwargs,
     ) -> None:
         self.model_id = model_id
         self.args = args
         self.args.remove_unused_columns = False
         self.args.gradient_checkpointing_kwargs = {"use_reentrant": False}
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         tokenizer = LlamaTokenizer.from_pretrained(
             model_id, add_eos_token=False, add_bos_token=False, use_fast=False, pad_token="<unk>", padding_side="left"
@@ -34,7 +34,25 @@ class QueryGenTrainer(SFTTrainer):
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         tokenizer.padding_side = "left"
         self.tokenizer = tokenizer
-        # self.args.evaluation_strategy = "no" if eval_dataset is None
+
+        train_dataset = JSONDataset.load(
+            path=dataset_args.train_dataset,
+            tok=tokenizer,
+            split=dataset_args.train_split,
+            max_len=args.seq_len,
+            num_workers=args.dataloader_num_workers,
+        )
+
+        if dataset_args.eval_dataset:
+            eval_dataset = JSONDataset.load(
+                path=dataset_args.eval_dataset,
+                tok=tokenizer,
+                split=dataset_args.eval_split,
+                max_len=args.seq_len,
+                num_workers=args.dataloader_num_workers,
+            )
+        else:
+            eval_dataset = None
 
         bnb_config = BitsAndBytesConfig(
             # load_in_8bit=True
@@ -63,10 +81,18 @@ class QueryGenTrainer(SFTTrainer):
             model=self.model,
             max_seq_length=self.args.seq_len,
             train_dataset=train_dataset.map(
-                function=dt.tokenize, batched=True, remove_columns=["query", "passage"], num_proc=14
+                function=dt.tokenize,
+                batched=True,
+                remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
+                num_proc=args.dataloader_num_workers,
+                desc="Formatting train prompts",
             ),
             eval_dataset=eval_dataset.map(
-                function=dt.tokenize, batched=True, remove_columns=["query", "passage"], num_proc=14
+                function=dt.tokenize,
+                batched=True,
+                remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
+                num_proc=args.dataloader_num_workers,
+                desc="Formatting test prompts",
             ),
             peft_config=lora_config,
             tokenizer=self.tokenizer,

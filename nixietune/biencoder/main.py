@@ -3,10 +3,10 @@ from sentence_transformers import SentenceTransformer
 from transformers.trainer_callback import TrainerControl, TrainerState
 from transformers.training_args import TrainingArguments
 from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
-from transformers import HfArgumentParser, TrainerCallback, AutoTokenizer
+from transformers import HfArgumentParser, TrainerCallback
 import logging
 from nixietune import ModelArguments, DatasetArguments
-from nixietune.format.trec import TRECDataset
+from nixietune.format.json import JSONDataset
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
@@ -23,39 +23,29 @@ def main(argv):
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     device = "cpu" if training_args.use_cpu else "cuda"
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    model = SentenceTransformer(model_args.model_name_or_path, device=device)
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, use_fast=True)
-    if dataset_args.train_dataset == dataset_args.eval_dataset:
-        train = TRECDataset.from_dir(
-            path=dataset_args.train_dataset,
-            tokenizer=tokenizer,
-            qrel_splits=[dataset_args.train_split, dataset_args.eval_split],
-            max_length=training_args.seq_len,
-        )
-        test = train
-    else:
-        train = TRECDataset.from_dir(
-            path=dataset_args.train_dataset,
-            tokenizer=tokenizer,
-            qrel_splits=[dataset_args.train_split],
-            max_length=training_args.seq_len,
-        )
-        if (dataset_args.eval_dataset) is not None:
-            test = TRECDataset.from_dir(
-                path=dataset_args.train_dataset,
-                tokenizer=tokenizer,
-                qrel_splits=[dataset_args.test_split],
-                max_length=training_args.seq_len,
-            )
-        else:
-            test = None
 
+    model = SentenceTransformer(model_args.model_name_or_path, device=device)
+    train = JSONDataset.load(
+        dataset_args.train_dataset,
+        split=dataset_args.train_split,
+        max_len=training_args.seq_len,
+        tok=model.tokenizer,
+        num_workers=training_args.dataloader_num_workers,
+    )
+    test = None
+    if (dataset_args.eval_dataset) is not None:
+        test = JSONDataset.load(
+            dataset_args.eval_dataset,
+            split=dataset_args.eval_split,
+            max_len=training_args.seq_len,
+            tok=model.tokenizer,
+            num_workers=training_args.dataloader_num_workers,
+        )
     logger.info(f"Training parameters: {training_args}")
 
     trainer = BiencoderTrainer(
         model=model,
-        tokenizer=tokenizer,
+        tokenizer=model.tokenizer,
         args=training_args,
         train_dataset=train,
         eval_dataset=test,

@@ -13,7 +13,6 @@ from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
 import numpy as np
 from itertools import islice
-from nixietune.format.trec import TRECDataset
 from nixietune.biencoder.layout import QueryDocLabelLayout, Layout, QueryPosNegsLayout
 from nixietune.target.infonce import InfoNCELoss
 
@@ -37,13 +36,14 @@ class BiencoderTrainer(Trainer):
         model: SentenceTransformer,
         tokenizer: PreTrainedTokenizerBase,
         args: BiencoderTrainingArguments,
-        train_dataset: TRECDataset,
+        train_dataset: Dataset,
         train_split: str,
-        eval_dataset: Optional[TRECDataset],
+        eval_dataset: Optional[Dataset],
         eval_split: Optional[str],
         eval_metrics: List[str] = ["ndcg@10"],
         **kwargs,
     ) -> None:
+        self.args = args
         self.eval_metrics = EvalMetrics(eval_metrics)
         tokenizer = model.tokenizer
         tokenizer.model_max_length = args.seq_len
@@ -92,12 +92,12 @@ class BiencoderTrainer(Trainer):
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
         # self.print_raw_stats(train_dataset)
-        train_processed = self.prepare_dataset(dataset=train_dataset.load_split(train_split), format=self.format)
+        train_processed = self.prepare_dataset(dataset=train_dataset, format=self.format)
         # self.print_tokenized_stats(train_processed)
         if eval_dataset is not None:
             self.eval_loss = losses.CosineSimilarityLoss(model)
             self.eval_format = QueryDocLabelLayout()
-            eval_processed = self.prepare_dataset(dataset=eval_dataset.load_split(eval_split), format=self.eval_format)
+            eval_processed = self.prepare_dataset(dataset=eval_dataset, format=self.eval_format)
             self.eval_loss.to(model.device)
         else:
             eval_processed = None
@@ -156,9 +156,10 @@ class BiencoderTrainer(Trainer):
             function=format.unwrap,
             batched=True,
             batch_size=128,
-            remove_columns=["query", "docs", "scores"],
-            desc=format.desc(),
+            remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
             features=format.schema(),
+            desc=format.desc(),
+            num_proc=self.args.dataloader_num_workers,
         )
         return processed
 
