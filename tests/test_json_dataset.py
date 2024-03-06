@@ -83,13 +83,13 @@ def test_fail_negscore_mismatch():
 
 def test_only_pos():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    ds = Dataset.from_list([{"pos": "bar"}])
+    ds = Dataset.from_list([{"pos": "bar"}, {"pos": "bar"}])
     parsed = JSONDataset.from_dataset(ds=ds, tokenizer=tokenizer, max_len=128).to_dict()
     assert parsed == {
-        "query": [None],
-        "query_text": [None],
-        "pos": [[101, 3347, 102]],
-        "pos_text": ["bar"],
-        "neg": [[]],
-        "negscore": [[]],
+        "query": [None, None],
+        "query_text": [None, None],
+        "pos": [[101, 3347, 102], [101, 3347, 102]],
+        "pos_text": ["bar", "bar"],
+        "neg": [[], []],
+        "negscore": [[], []],
     }

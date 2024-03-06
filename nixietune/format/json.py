@@ -82,7 +82,8 @@ class JSONDataset:
                 for neglist in batch.get("neg"):
                     scores.append([0] * len(neglist))
             else:
-                scores.append([])
+                for q in batch["pos"]:
+                    scores.append([])
             result = {
                 "query": query,
                 "query_text": batch["query"] if "query" in batch else [None] * len(batch["pos"]),
@@ -91,6 +92,7 @@ class JSONDataset:
                 "neg": negatives,
                 "negscore": scores,
             }
+            # logger.info(result)
             return result
 
         schema = Features(

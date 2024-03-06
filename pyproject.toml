@@ -29,7 +29,8 @@ dependencies = [
     "bitsandbytes",
     "evaluate",
     "trl",
-    "sentencepiece"
+    "sentencepiece",
+    "hnswlib"
 ]
 test = [
     "pytest", "pytest-skip-slow"

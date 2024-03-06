@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding, GenerationConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding, GenerationConfig, PreTrainedTokenizerBase
 import torch
 from typing import Dict, Generator, List, Any
 from nixietune.format.json import JSONDataset
@@ -13,7 +13,8 @@ class GeneratorArguments:
     seq_len: int = field(default=512, metadata={"help": "sequence length of the input passage"})
     prompt_modifier: str = field(default="", metadata={"help": "prompt prefix modifiers"})
     max_new_tokens: int = field(default=32, metadata={"help": "how many new tokens should be generated max"})
-    batch_size: int = field(default=8, metadata={"help": "batch size"})
+    batch_size: int = field(default=48, metadata={"help": "batch size"})
+    num_workers: int = field(default=8, metadata={"help": "number of data loader workers"})
 
 
 @dataclass
@@ -41,44 +42,33 @@ class QueryGenerator:
             torch_dtype=torch.bfloat16,
             **model_kwargs,
         )
-        self.query_input_ids = self.tokenizer(" query:", padding=False)["input_ids"]  # no space at end!
         self.model.eval()
 
     def generate(self, input: str):
-        corpus = JSONDataset.from_file(input, tokenizer=self.tokenizer, max_len=256, split="train").select_columns(
-            ["pos"]
-        )
+        pt = PromptTokenizer(self.tokenizer, self.args.seq_len, self.model.device)
+        corpus = JSONDataset.from_file(
+            input,
+            tokenizer=self.tokenizer,
+            max_len=256,
+            split="train",
+            num_workers=self.args.num_workers,
+        ).select_columns(["pos"])
         processed = corpus.map(
-            function=self.tokenize_batch,
+            function=pt.tokenize_batch,
             batched=True,
             desc="formatting prompts",
             remove_columns=["pos"],
+            num_proc=self.args.num_workers,
         )
-        loader = DataLoader(processed, batch_size=self.args.batch_size, collate_fn=self.collate_batch)
+        loader = DataLoader(
+            processed,
+            batch_size=self.args.batch_size,
+            collate_fn=pt.collate_batch,
+        )
 
         for batch in tqdm(loader, desc="generating queries"):
             for item in self.process_batch(batch):
                 yield item
-
-    def collate_batch(self, batch: List[Dict[str, Any]]):
-        passages_inputs = [item["input_ids"] for item in batch]
-        passages_attmasks = [item["attention_mask"] for item in batch]
-        encoded = BatchEncoding({"input_ids": passages_inputs, "attention_mask": passages_attmasks})
-        padded = self.tokenizer.pad(encoded, pad_to_multiple_of=8, return_tensors="pt").to(self.model.device)
-        return padded
-
-    def tokenize_batch(self, batch: Dict[str, List[Any]]) -> Dict[str, List]:
-        tokenized_passages = batch["pos"]
-        max_doc_len = self.args.seq_len - len(self.query_input_ids) - 1
-        passages_inputs = []
-        passages_attmasks = []
-        for tp in tokenized_passages:
-            passage = (
-                [self.tokenizer.bos_token_id] + tp[:max_doc_len] + self.query_input_ids
-            )  # no eos, as we expect to continue the generation
-            passages_inputs.append(passage)
-            passages_attmasks.append([1] * len(passage))
-        return {"input_ids": passages_inputs, "attention_mask": passages_attmasks}
 
     def process_batch(self, batch) -> List[Dict[str, Any]]:
         config = GenerationConfig(
@@ -97,3 +87,31 @@ class QueryGenerator:
             passages.append(out[:pos])
 
         return [{"query": query, "pos": doc} for doc, query in zip(passages, queries)]
+
+
+class PromptTokenizer:
+    def __init__(self, tok: PreTrainedTokenizerBase, seq_len: int, device):
+        self.tokenizer = tok
+        self.seq_len = seq_len
+        self.query_input_ids = self.tokenizer(" query:", padding=False)["input_ids"]  # no space at end!
+        self.device = device
+
+    def collate_batch(self, batch: List[Dict[str, Any]]):
+        passages_inputs = [item["input_ids"] for item in batch]
+        passages_attmasks = [item["attention_mask"] for item in batch]
+        encoded = BatchEncoding({"input_ids": passages_inputs, "attention_mask": passages_attmasks})
+        padded = self.tokenizer.pad(encoded, pad_to_multiple_of=8, return_tensors="pt").to(self.device)
+        return padded
+
+    def tokenize_batch(self, batch: Dict[str, List[Any]]) -> Dict[str, List]:
+        tokenized_passages = batch["pos"]
+        max_doc_len = self.seq_len - len(self.query_input_ids) - 1
+        passages_inputs = []
+        passages_attmasks = []
+        for tp in tokenized_passages:
+            passage = (
+                [self.tokenizer.bos_token_id] + tp[:max_doc_len] + self.query_input_ids
+            )  # no eos, as we expect to continue the generation
+            passages_inputs.append(passage)
+            passages_attmasks.append([1] * len(passage))
+        return {"input_ids": passages_inputs, "attention_mask": passages_attmasks}
