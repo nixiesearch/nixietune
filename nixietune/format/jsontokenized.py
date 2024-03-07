@@ -81,7 +81,7 @@ class JSONTokenizedDataset:
                     else:
                         scores.append(negscorelist)
             elif "neg" in batch:
-                for neglist in batch.get("neg"):
+                for neglist in batch["neg"]:
                     scores.append([0] * len(neglist))
             else:
                 for q in batch["doc"]:
