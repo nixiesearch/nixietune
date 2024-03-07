@@ -31,7 +31,7 @@ class DatasetTokenizer:
 
     def tokenize(self, batch: Dict[str, List[str]]) -> Dict[str, List]:
         queries = []
-        for query in batch["query_text"]:
+        for query in batch["query"]:
             # length_prefix = self.length_type(query)
             # type_prefix = self.question_type(query)
             # processed_query = f"{length_prefix} {type_prefix} query: {query}"
@@ -46,7 +46,7 @@ class DatasetTokenizer:
             return_length=False,
         )
 
-        passages = batch["pos_text"]
+        passages = batch["doc"]
         tokenized_passages = self.tokenizer(
             passages,
             padding=False,

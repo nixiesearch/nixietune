@@ -63,6 +63,9 @@ class BiencoderTrainer(Trainer):
                     model, negative_mode=args.infonce_negative_mode, temperature=args.infonce_temperature
                 )
                 self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
+            case "cmnrl":
+                self.loss = losses.CachedMultipleNegativesRankingLoss(model, mini_batch_size=128)
+                self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
             # case "contrastive":
             #     self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
             # case "mixed":

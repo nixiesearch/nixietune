@@ -6,7 +6,7 @@ from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
 from transformers import HfArgumentParser, TrainerCallback
 import logging
 from nixietune import ModelArguments, DatasetArguments
-from nixietune.format.json import JSONDataset
+from nixietune.format.jsontokenized import JSONTokenizedDataset
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
@@ -25,7 +25,7 @@ def main(argv):
     device = "cpu" if training_args.use_cpu else "cuda"
 
     model = SentenceTransformer(model_args.model_name_or_path, device=device)
-    train = JSONDataset.load(
+    train = JSONTokenizedDataset.load(
         dataset_args.train_dataset,
         split=dataset_args.train_split,
         max_len=training_args.seq_len,
@@ -34,7 +34,7 @@ def main(argv):
     )
     test = None
     if (dataset_args.eval_dataset) is not None:
-        test = JSONDataset.load(
+        test = JSONTokenizedDataset.load(
             dataset_args.eval_dataset,
             split=dataset_args.eval_split,
             max_len=training_args.seq_len,

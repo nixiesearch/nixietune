@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding, GenerationConfig, PreTrainedTokenizerBase
 import torch
-from typing import Dict, Generator, List, Any
-from nixietune.format.json import JSONDataset
+from typing import Dict, List, Any
+from nixietune.format.jsontokenized import JSONTokenizedDataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -45,28 +45,16 @@ class QueryGenerator:
         self.model.eval()
 
     def generate(self, input: str):
-        pt = PromptTokenizer(self.tokenizer, self.args.seq_len, self.model.device)
-        corpus = JSONDataset.from_file(
-            input,
+        data_loader = QueryGenerator.load_dataset(
+            input=input,
             tokenizer=self.tokenizer,
-            max_len=256,
-            split="train",
+            seq_len=self.args.seq_len,
             num_workers=self.args.num_workers,
-        ).select_columns(["pos"])
-        processed = corpus.map(
-            function=pt.tokenize_batch,
-            batched=True,
-            desc="formatting prompts",
-            remove_columns=["pos"],
-            num_proc=self.args.num_workers,
-        )
-        loader = DataLoader(
-            processed,
+            device=self.model.device,
             batch_size=self.args.batch_size,
-            collate_fn=pt.collate_batch,
         )
 
-        for batch in tqdm(loader, desc="generating queries"):
+        for batch in tqdm(data_loader, desc="generating queries"):
             for item in self.process_batch(batch):
                 yield item
 
@@ -86,7 +74,33 @@ class QueryGenerator:
             queries.append(out[pos + 7 :])
             passages.append(out[:pos])
 
-        return [{"query": query, "pos": doc} for doc, query in zip(passages, queries)]
+        return [{"query": query, "doc": doc} for doc, query in zip(passages, queries)]
+
+    @staticmethod
+    def load_dataset(
+        input: str, tokenizer: PreTrainedTokenizerBase, seq_len: int, num_workers: int, batch_size: int, device
+    ) -> DataLoader:
+        pt = PromptTokenizer(tokenizer, seq_len, device)
+        corpus = JSONTokenizedDataset.from_file(
+            input,
+            num_workers=num_workers,
+            split="train",
+            tokenizer=tokenizer,
+            max_len=seq_len,
+        ).select_columns(["doc"])
+        processed = corpus.map(
+            function=pt.tokenize_batch,
+            batched=True,
+            desc="formatting prompts",
+            remove_columns=["doc"],
+            num_proc=num_workers,
+        )
+        loader = DataLoader(
+            processed,
+            batch_size=batch_size,
+            collate_fn=pt.collate_batch,
+        )
+        return loader
 
 
 class PromptTokenizer:
@@ -104,7 +118,7 @@ class PromptTokenizer:
         return padded
 
     def tokenize_batch(self, batch: Dict[str, List[Any]]) -> Dict[str, List]:
-        tokenized_passages = batch["pos"]
+        tokenized_passages = batch["doc"]
         max_doc_len = self.seq_len - len(self.query_input_ids) - 1
         passages_inputs = []
         passages_attmasks = []

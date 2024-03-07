@@ -1,6 +1,6 @@
 from typing import Optional
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig, LlamaTokenizer
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig, LlamaTokenizer, PreTrainedTokenizerBase
 from nixietune.querygen.train.arguments import QueryGenArguments
 from datasets import Dataset
 import torch
@@ -35,25 +35,6 @@ class QueryGenTrainer(SFTTrainer):
         tokenizer.padding_side = "left"
         self.tokenizer = tokenizer
 
-        train_dataset = JSONDataset.load(
-            path=dataset_args.train_dataset,
-            tok=tokenizer,
-            split=dataset_args.train_split,
-            max_len=args.seq_len,
-            num_workers=args.dataloader_num_workers,
-        )
-
-        if dataset_args.eval_dataset:
-            eval_dataset = JSONDataset.load(
-                path=dataset_args.eval_dataset,
-                tok=tokenizer,
-                split=dataset_args.eval_split,
-                max_len=args.seq_len,
-                num_workers=args.dataloader_num_workers,
-            )
-        else:
-            eval_dataset = None
-
         bnb_config = BitsAndBytesConfig(
             # load_in_8bit=True
             load_in_4bit=True,
@@ -74,25 +55,23 @@ class QueryGenTrainer(SFTTrainer):
             lora_dropout=0.05,
         )
 
-        dt = DatasetTokenizer(tokenizer, args.seq_len)
-
         super().__init__(
             args=self.args,
             model=self.model,
             max_seq_length=self.args.seq_len,
-            train_dataset=train_dataset.map(
-                function=dt.tokenize,
-                batched=True,
-                remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
-                num_proc=args.dataloader_num_workers,
-                desc="Formatting train prompts",
+            train_dataset=QueryGenTrainer.load_dataset(
+                name=dataset_args.train_dataset,
+                split=dataset_args.train_split,
+                tokenizer=tokenizer,
+                seq_len=args.seq_len,
+                num_workers=args.dataloader_num_workers,
             ),
-            eval_dataset=eval_dataset.map(
-                function=dt.tokenize,
-                batched=True,
-                remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
-                num_proc=args.dataloader_num_workers,
-                desc="Formatting test prompts",
+            eval_dataset=QueryGenTrainer.load_dataset(
+                name=dataset_args.train_dataset,
+                split=dataset_args.train_split,
+                tokenizer=tokenizer,
+                seq_len=args.seq_len,
+                num_workers=args.dataloader_num_workers,
             ),
             peft_config=lora_config,
             tokenizer=self.tokenizer,
@@ -116,3 +95,26 @@ class QueryGenTrainer(SFTTrainer):
         add_special_tokens=True,
     ):
         return dataset
+
+    @staticmethod
+    def load_dataset(
+        name: Optional[str],
+        split: Optional[str],
+        tokenizer: PreTrainedTokenizerBase,
+        seq_len: int,
+        num_workers: int,
+    ) -> Optional[Dataset]:
+        if name:
+            dt = DatasetTokenizer(tokenizer, seq_len)
+            split_str = split if split else "train"
+            loaded = JSONDataset.load(path=name, split=split_str, num_workers=num_workers)
+            processed = loaded.map(
+                function=dt.tokenize,
+                batched=True,
+                remove_columns=["query", "doc", "neg", "negscore"],
+                num_proc=num_workers,
+                desc=f"Formatting {split_str} prompts",
+            )
+            return processed
+        else:
+            return None
