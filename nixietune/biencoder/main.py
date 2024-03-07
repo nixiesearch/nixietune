@@ -5,8 +5,8 @@ from transformers.training_args import TrainingArguments
 from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
 from transformers import HfArgumentParser, TrainerCallback
 import logging
-from nixietune import load_dataset_split, ModelArguments, DatasetArguments
-from datasets import Features, Value
+from nixietune import ModelArguments, DatasetArguments
+from nixietune.format.jsontokenized import JSONTokenizedDataset
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
@@ -23,30 +23,35 @@ def main(argv):
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     device = "cpu" if training_args.use_cpu else "cuda"
+
     model = SentenceTransformer(model_args.model_name_or_path, device=device)
-    schema = Features({"query": Value("string"), "positive": [Value("string")], "negative": [Value("string")]})
-    train = load_dataset_split(
+    train = JSONTokenizedDataset.load(
         dataset_args.train_dataset,
         split=dataset_args.train_split,
-        samples=dataset_args.train_samples,
-        streaming=dataset_args.streaming,
-        schema=schema,
+        max_len=training_args.seq_len,
+        tok=model.tokenizer,
+        num_workers=training_args.dataloader_num_workers,
     )
-    if dataset_args.eval_dataset is not None:
-        test = load_dataset_split(
+    test = None
+    if (dataset_args.eval_dataset) is not None:
+        test = JSONTokenizedDataset.load(
             dataset_args.eval_dataset,
             split=dataset_args.eval_split,
-            samples=dataset_args.eval_samples,
-            streaming=False,
-            schema=schema,
+            max_len=training_args.seq_len,
+            tok=model.tokenizer,
+            num_workers=training_args.dataloader_num_workers,
         )
-    else:
-        test = None
-
     logger.info(f"Training parameters: {training_args}")
 
     trainer = BiencoderTrainer(
-        model=model, args=training_args, train_dataset=train, eval_dataset=test, streaming=dataset_args.streaming
+        model=model,
+        tokenizer=model.tokenizer,
+        args=training_args,
+        train_dataset=train,
+        eval_dataset=test,
+        train_split=dataset_args.train_split,
+        eval_split=dataset_args.eval_split,
+        eval_metrics=training_args.eval_metrics,
     )
     if test is not None:
         if trainer.is_deepspeed_enabled:

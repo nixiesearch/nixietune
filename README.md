@@ -11,12 +11,21 @@ Nixietune is a GPU fine-tuning harness for semantic search models. Built for the
 * based on battle-tested [sentence-transformers](https://github.com/UKPLab/sentence-transformers) library, but uses modern Huggingface ecosystem for training: multi-GPU and distributed training, FP16/BF16 mixed-precision, gradient checkpointing/accumulation and dataset caching.
 * Can be used with and without hard negatives, supports InfoNCE/Cosine/Contrastive/Triples losses.
 
+## Features
+
+What Nixietune can do for you:
+
+* Fine-tune an existing embedding model on your labeled data.
+* Generate synthetic queries and labels
+
 ## Usage
+
+### Fine-tuning an embedding model
 
 To fine-tune a semantic search embedding model on your data:
 
 * **Install nixietune**: you need a GPU for that!
-* **Format your data in a nixietune format**: a JSONL file with a specific schema.
+* **Format your data in a nixietune format**: a TREC json/tsv file format with a specific schema.
 * **Run the training**: for base/small models it takes less than an hour on a single GPU.
 * **Tinker with params**: choose the best loss and make your model training faster.
 

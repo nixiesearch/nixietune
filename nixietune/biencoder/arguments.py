@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from transformers import TrainingArguments
-from typing import Optional
+from typing import Optional, List
 
 
 @dataclass
@@ -34,3 +34,7 @@ class BiencoderTrainingArguments(TrainingArguments):
     )
 
     infonce_temperature: float = field(default=0.05, metadata={"help": "Temperature for InfoNCE loss"})
+
+    eval_metrics: List[str] = field(
+        default_factory=lambda: ["ndcg@10"], metadata={"help": "metrics to eval during training"}
+    )

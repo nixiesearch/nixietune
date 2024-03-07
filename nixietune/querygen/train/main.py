@@ -5,7 +5,7 @@ from nixietune.querygen.train.trainer import QueryGenTrainer
 from nixietune.querygen.train.arguments import QueryGenArguments
 from transformers import HfArgumentParser, TrainerCallback
 import logging
-from nixietune import load_dataset_split, ModelArguments, DatasetArguments
+from nixietune import ModelArguments, DatasetArguments
 
 
 class EvaluateFirstStepCallback(TrainerCallback):
@@ -21,28 +21,8 @@ def main(argv):
     else:
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
-    train = load_dataset_split(
-        dataset_args.train_dataset,
-        split=dataset_args.train_split,
-        samples=dataset_args.train_samples,
-        streaming=dataset_args.streaming,
-        schema=None,
-    )
-    if dataset_args.eval_dataset is not None:
-        test = load_dataset_split(
-            dataset_args.eval_dataset,
-            split=dataset_args.eval_split,
-            samples=dataset_args.eval_samples,
-            streaming=False,
-            schema=None,
-        )
-    else:
-        test = None
-
     logger.info(f"Training parameters: {training_args}")
 
-    trainer = QueryGenTrainer(
-        model_id=model_args.model_name_or_path, args=training_args, train_dataset=train, eval_dataset=test
-    )
+    trainer = QueryGenTrainer(model_id=model_args.model_name_or_path, args=training_args, dataset_args=dataset_args)
     trainer.train()
     trainer.save_model(training_args.output_dir)

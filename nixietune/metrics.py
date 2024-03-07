@@ -32,13 +32,17 @@ class EvalMetrics:
                     metric = RetrievalNormalizedDCG(top_k=int(k))
                     result[metric_name] = metric(preds=scores, target=targets, indexes=indexes)
                 case ["map"]:
-                    result[metric_name] = RetrievalMAP()
+                    metric = RetrievalMAP()
+                    result[metric_name] = metric(preds=scores, target=targets, indexes=indexes)
                 case ["map", k]:
-                    result[metric_name] = RetrievalMAP(top_k=int(k))
+                    metric = RetrievalMAP(top_k=int(k))
+                    result[metric_name] = metric(preds=scores, target=targets, indexes=indexes)
                 case ["mrr"]:
-                    result[metric_name] = RetrievalMRR()
+                    metric = RetrievalMRR()
+                    result[metric_name] = metric(preds=scores, target=targets, indexes=indexes)
                 case ["mrr", k]:
-                    result[metric_name] = RetrievalMRR(top_k=int(k))
+                    metric = RetrievalMRR(top_k=int(k))
+                    result[metric_name] = metric(preds=scores, target=targets, indexes=indexes)
                 case other:
                     logger.warn(f"Metric type {other} is not yet supported")
 

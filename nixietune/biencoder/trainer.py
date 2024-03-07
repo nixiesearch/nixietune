@@ -1,5 +1,5 @@
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, losses
 from transformers import Trainer
 from typing import List, Dict, Any, Union, Tuple, Optional
 import torch
@@ -7,20 +7,14 @@ from torch import nn
 
 from datasets import Dataset
 from nixietune.metrics import EvalMetrics
-from nixietune.target import (
-    CosineSimilarityTarget,
-    ContrastiveTarget,
-    InfoNCETarget,
-    TripletTarget,
-    MixedTarget,
-)
 from nixietune.biencoder.arguments import BiencoderTrainingArguments
-from nixietune.format import Format
 import logging
 from transformers.tokenization_utils_base import BatchEncoding
 from tqdm import tqdm
 import numpy as np
 from itertools import islice
+from nixietune.biencoder.layout import QueryDocLabelLayout, Layout, QueryPosNegsLayout
+from nixietune.target.infonce import InfoNCELoss
 
 logger = logging.getLogger()
 
@@ -40,73 +34,74 @@ class BiencoderTrainer(Trainer):
     def __init__(
         self,
         model: SentenceTransformer,
+        tokenizer: PreTrainedTokenizerBase,
         args: BiencoderTrainingArguments,
         train_dataset: Dataset,
+        train_split: str,
         eval_dataset: Optional[Dataset],
+        eval_split: Optional[str],
         eval_metrics: List[str] = ["ndcg@10"],
-        streaming: bool = False,
         **kwargs,
     ) -> None:
+        self.args = args
         self.eval_metrics = EvalMetrics(eval_metrics)
         tokenizer = model.tokenizer
         tokenizer.model_max_length = args.seq_len
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         match args.target:
-            case "cosine_similarity":
-                self.target = CosineSimilarityTarget(model, tokenizer, args.query_prefix, args.document_prefix)
-            case "contrastive":
-                self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
-            case "mixed":
-                self.target = MixedTarget(
-                    model,
-                    tokenizer,
-                    num_negs=args.num_negatives,
-                    query_prefix=args.query_prefix,
-                    doc_prefix=args.document_prefix,
-                )
+            case "cosine":
+                self.loss = losses.CosineSimilarityLoss(model)
+                self.format = QueryDocLabelLayout()
+            case "angle":
+                self.loss = losses.AnglELoss(model)
+                self.format = QueryDocLabelLayout()
+            case "cosent":
+                self.loss = losses.CoSENTLoss(model)
+                self.format = QueryDocLabelLayout()
             case "infonce":
-                self.target = InfoNCETarget(
-                    model,
-                    tokenizer,
-                    num_negs=args.num_negatives,
-                    query_prefix=args.query_prefix,
-                    doc_prefix=args.document_prefix,
-                    temperature=args.infonce_temperature,
-                    negative_mode=args.infonce_negative_mode,
+                self.loss = InfoNCELoss(
+                    model, negative_mode=args.infonce_negative_mode, temperature=args.infonce_temperature
                 )
-            case "triplet":
-                self.target = TripletTarget(
-                    model, tokenizer, args.query_prefix, args.document_prefix, args.num_negatives, args.triplet_margin
-                )
-        self.eval_target = CosineSimilarityTarget(model, tokenizer, args.query_prefix, args.document_prefix)
-        self.processor = self.target.process()
-        self.eval_processor = self.eval_target.process()
-        self.loss = self.target.loss()
+                self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
+            case "cmnrl":
+                self.loss = losses.CachedMultipleNegativesRankingLoss(model, mini_batch_size=128)
+                self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
+            # case "contrastive":
+            #     self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
+            # case "mixed":
+            #     self.target = MixedTarget(
+            #         model,
+            #         tokenizer,
+            #         num_negs=args.num_negatives,
+            #         query_prefix=args.query_prefix,
+            #         doc_prefix=args.document_prefix,
+            #     )
+            # case "infonce":
+            #     self.target = InfoNCETarget(
+            #         model,
+            #         tokenizer,
+            #         num_negs=args.num_negatives,
+            #         query_prefix=args.query_prefix,
+            #         doc_prefix=args.document_prefix,
+            #         temperature=args.infonce_temperature,
+            #         negative_mode=args.infonce_negative_mode,
+            #     )
+            # case "triplet":
+            #     self.target = TripletTarget(
+            #         model, tokenizer, args.query_prefix, args.document_prefix, args.num_negatives, args.triplet_margin
+            #     )
         self.loss.to(model.device)
-        self.eval_loss = self.eval_target.loss()
-        self.eval_loss.to(model.device)
         args.label_names = ["label"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
         # self.print_raw_stats(train_dataset)
-        train_processed = self.prepare_dataset(
-            train_dataset,
-            fmt=self.processor,
-            tokenizer=tokenizer,
-            name="train",
-            streaming=streaming,
-            num_workers=args.dataloader_num_workers,
-        )
+        train_processed = self.prepare_dataset(dataset=train_dataset, format=self.format)
         # self.print_tokenized_stats(train_processed)
         if eval_dataset is not None:
-            eval_processed = self.prepare_dataset(
-                eval_dataset,
-                fmt=self.eval_processor,
-                tokenizer=tokenizer,
-                name="test",
-                streaming=False,
-                num_workers=args.dataloader_num_workers,
-            )
+            self.eval_loss = losses.CosineSimilarityLoss(model)
+            self.eval_format = QueryDocLabelLayout()
+            eval_processed = self.prepare_dataset(dataset=eval_dataset, format=self.eval_format)
+            self.eval_loss.to(model.device)
         else:
             eval_processed = None
             args.evaluation_strategy = "no"
@@ -114,9 +109,9 @@ class BiencoderTrainer(Trainer):
         bi_model.warnings_issued["estimate_tokens"] = True
         if args.max_steps == -1:
             batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps * args.world_size
-            dataset_size = train_dataset.info.splits["train"].num_examples
+            dataset_size = len(train_processed)
             args.max_steps = int(dataset_size / batch_size)
-            print("dataset {dataset_size} batch {batch_size}")
+            print(f"dataset {dataset_size} batch {batch_size}")
 
         super().__init__(
             args=args,
@@ -159,33 +154,16 @@ class BiencoderTrainer(Trainer):
             result.append({"sentence_embedding": se.clone()})
         return result
 
-    def prepare_dataset(
-        self,
-        dataset: Dataset,
-        fmt: Format,
-        tokenizer: PreTrainedTokenizerBase,
-        name: str,
-        streaming: bool,
-        num_workers: int,
-    ) -> Dataset:
-        if streaming is False:
-            dtype = "uint16" if len(tokenizer) < 65535 else "uint32"
-            processed = dataset.map(
-                fmt.tokenize,
-                batched=True,
-                batch_size=128,
-                num_proc=num_workers,
-                remove_columns=["query", "positive", "negative"],
-                desc=f"Tokenizing {name} dataset",
-                features=fmt.schema(dtype),
-            )
-        else:
-            processed = dataset.map(
-                fmt.tokenize,
-                batched=True,
-                batch_size=128,
-                remove_columns=["query", "positive", "negative"],
-            )
+    def prepare_dataset(self, dataset: Dataset, format: Layout) -> Dataset:
+        processed = dataset.map(
+            function=format.unwrap,
+            batched=True,
+            batch_size=128,
+            remove_columns=["query", "doc", "neg", "negscore"],
+            features=format.schema(),
+            desc=format.desc(),
+            num_proc=self.args.dataloader_num_workers,
+        )
         return processed
 
     def collate(self, items: List[Dict[str, Dict]]) -> Dict[str, Dict[str, torch.Tensor]]:
@@ -208,8 +186,8 @@ class BiencoderTrainer(Trainer):
     def pad(self, docs: List[Dict[str, Any]]) -> BatchEncoding:
         batch = BatchEncoding(
             data={
-                "input_ids": [f["input_ids"] for f in docs],
-                "attention_mask": [f["attention_mask"] for f in docs],
+                "input_ids": docs,
+                "attention_mask": [[1] * len(f) for f in docs],
             }
         )
         return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")
