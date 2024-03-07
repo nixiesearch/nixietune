@@ -67,8 +67,8 @@ def test_query_pos_neg_scores():
 def test_fail_negscore_mismatch():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     ds = Dataset.from_list([{"query": "foo", "doc": "bar", "neg": ["bar", "bar"], "negscore": [0.5]}])
-    with pytest.raises(Exception) as error:
-        parsed = JSONTokenizedDataset.from_dataset(ds=ds, tokenizer=tokenizer, max_len=128).to_dict()
+    with pytest.raises(Exception):
+        JSONTokenizedDataset.from_dataset(ds=ds, tokenizer=tokenizer, max_len=128).to_dict()
 
 
 def test_only_pos():

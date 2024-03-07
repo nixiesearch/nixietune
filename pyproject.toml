@@ -32,8 +32,10 @@ dependencies = [
     "sentencepiece",
     "hnswlib"
 ]
+
+[project.optional-dependencies]
 test = [
-    "pytest", "pytest-skip-slow"
+    "pytest", "pytest-skip-slow", "ruff"
 ]
 
 [project.urls]

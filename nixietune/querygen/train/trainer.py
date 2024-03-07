@@ -6,7 +6,6 @@ from datasets import Dataset
 import torch
 import logging
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
-import os
 from nixietune.querygen.train.tokenizer import DatasetTokenizer
 from nixietune.arguments import DatasetArguments
 from nixietune.format.json import JSONDataset
