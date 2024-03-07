@@ -29,7 +29,7 @@ class QueryDocLabelLayout(Layout):
     def unwrap(self, batch: Dict[str, Any]) -> Dict[str, List]:
         features = []
         labels = []
-        for query, pos, negs, negscores in zip(batch["query"], batch["pos"], batch["neg"], batch["negscore"]):
+        for query, pos, negs, negscores in zip(batch["query"], batch["doc"], batch["neg"], batch["negscore"]):
             features.append([query, pos])
             labels.append(1.0)
             for neg, score in zip(negs, negscores):
@@ -50,7 +50,7 @@ class QueryPosNegsLayout(Layout):
 
     def unwrap(self, batch: Dict[str, Any]) -> Dict[str, List]:
         features = []
-        for query, pos, negs in zip(batch["query"], batch["pos"], batch["neg"]):
+        for query, pos, negs in zip(batch["query"], batch["doc"], batch["neg"]):
             if self.num_negatives > 0 and len(negs) > 0:
                 neg_sample = random.choices(negs, k=self.num_negatives)
                 features.append([query, pos] + neg_sample)

@@ -159,7 +159,7 @@ class BiencoderTrainer(Trainer):
             function=format.unwrap,
             batched=True,
             batch_size=128,
-            remove_columns=["query", "query_text", "pos", "pos_text", "neg", "negscore"],
+            remove_columns=["query", "doc", "neg", "negscore"],
             features=format.schema(),
             desc=format.desc(),
             num_proc=self.args.dataloader_num_workers,
