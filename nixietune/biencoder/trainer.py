@@ -14,7 +14,7 @@ from tqdm import tqdm
 import numpy as np
 from itertools import islice
 from nixietune.biencoder.layout import QueryDocLabelLayout, Layout, QueryPosNegsLayout
-from nixietune.target.infonce import InfoNCELoss
+from nixietune.biencoder.loss.infonce import InfoNCELoss
 
 logger = logging.getLogger()
 
@@ -37,14 +37,12 @@ class BiencoderTrainer(Trainer):
         tokenizer: PreTrainedTokenizerBase,
         args: BiencoderTrainingArguments,
         train_dataset: Dataset,
-        train_split: str,
         eval_dataset: Optional[Dataset],
-        eval_split: Optional[str],
         eval_metrics: List[str] = ["ndcg@10"],
         **kwargs,
     ) -> None:
         self.args = args
-        self.eval_metrics = EvalMetrics(eval_metrics)
+        self.eval_metrics = EvalMetrics(eval_metrics, tokenizer)
         tokenizer = model.tokenizer
         tokenizer.model_max_length = args.seq_len
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
@@ -64,32 +62,9 @@ class BiencoderTrainer(Trainer):
                 )
                 self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
             case "cmnrl":
-                self.loss = losses.CachedMultipleNegativesRankingLoss(model, mini_batch_size=128)
+                self.loss = losses.CachedMultipleNegativesRankingLoss(model, mini_batch_size=32)
                 self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
-            # case "contrastive":
-            #     self.target = ContrastiveTarget(model, tokenizer, args.query_prefix, args.document_prefix)
-            # case "mixed":
-            #     self.target = MixedTarget(
-            #         model,
-            #         tokenizer,
-            #         num_negs=args.num_negatives,
-            #         query_prefix=args.query_prefix,
-            #         doc_prefix=args.document_prefix,
-            #     )
-            # case "infonce":
-            #     self.target = InfoNCETarget(
-            #         model,
-            #         tokenizer,
-            #         num_negs=args.num_negatives,
-            #         query_prefix=args.query_prefix,
-            #         doc_prefix=args.document_prefix,
-            #         temperature=args.infonce_temperature,
-            #         negative_mode=args.infonce_negative_mode,
-            #     )
-            # case "triplet":
-            #     self.target = TripletTarget(
-            #         model, tokenizer, args.query_prefix, args.document_prefix, args.num_negatives, args.triplet_margin
-            #     )
+
         self.loss.to(model.device)
         args.label_names = ["label"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
@@ -116,7 +91,7 @@ class BiencoderTrainer(Trainer):
         super().__init__(
             args=args,
             model=bi_model,
-            compute_metrics=self.eval_metrics.compute,
+            compute_metrics=self.eval_metrics.compute_bi,
             preprocess_logits_for_metrics=self.move_to_cpu,
             train_dataset=train_processed,
             eval_dataset=eval_processed,

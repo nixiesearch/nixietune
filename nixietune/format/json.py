@@ -79,5 +79,9 @@ class JSONDataset:
                 else:
                     negscore.append([])
         else:
-            negscore = [[]] * batch_size
+            if "neg" in batch:
+                for negs in batch["neg"]:
+                    negscore.append([0] * len(negs))
+            else:
+                negscore.append([])
         return {"query": queries, "doc": doc, "neg": neg, "negscore": negscore}

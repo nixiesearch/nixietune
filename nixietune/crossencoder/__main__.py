@@ -1,45 +1,50 @@
+import sys
 import os
-from sentence_transformers import SentenceTransformer
-from nixietune.biencoder import BiencoderTrainer, BiencoderTrainingArguments
-from transformers import HfArgumentParser
+from nixietune.log import setup_logging
 import logging
-from nixietune import ModelArguments, DatasetArguments
-from nixietune.format.jsontokenized import JSONTokenizedDataset
+from transformers import HfArgumentParser, AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
+from nixietune.arguments import ModelArguments, DatasetArguments
+from nixietune.crossencoder.arguments import CrossEncoderArguments
+from nixietune.format.json import JSONDataset
 from nixietune.util.eval_callback import EvaluateFirstStepCallback
+from nixietune.crossencoder.trainer import CrossEncoderTrainer
+
+setup_logging()
+logger = logging.getLogger()
 
 
-def main(argv):
-    logger = logging.getLogger()
-    parser = HfArgumentParser((ModelArguments, DatasetArguments, BiencoderTrainingArguments))
-    if len(argv) == 2 and argv[1].endswith(".json"):
-        model_args, dataset_args, training_args = parser.parse_json_file(json_file=os.path.abspath(argv[1]))
+if __name__ == "__main__":
+    parser = HfArgumentParser((ModelArguments, DatasetArguments, CrossEncoderArguments))
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        model_args, dataset_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, dataset_args, training_args = parser.parse_args_into_dataclasses()
 
     device = "cpu" if training_args.use_cpu else "cuda"
+    config = AutoConfig.from_pretrained(model_args.model_name_or_path)
+    config.num_labels = 1
+    model = AutoModelForSequenceClassification.from_pretrained(model_args.model_name_or_path, config=config)
+    model.to(device)
 
-    model = SentenceTransformer(model_args.model_name_or_path, device=device)
-    train = JSONTokenizedDataset.load(
+    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
+
+    train = JSONDataset.load(
         dataset_args.train_dataset,
         split=dataset_args.train_split,
-        max_len=training_args.seq_len,
-        tok=model.tokenizer,
         num_workers=training_args.dataloader_num_workers,
     )
     test = None
     if (dataset_args.eval_dataset) is not None:
-        test = JSONTokenizedDataset.load(
+        test = JSONDataset.load(
             dataset_args.eval_dataset,
             split=dataset_args.eval_split,
-            max_len=training_args.seq_len,
-            tok=model.tokenizer,
             num_workers=training_args.dataloader_num_workers,
         )
     logger.info(f"Training parameters: {training_args}")
 
-    trainer = BiencoderTrainer(
+    trainer = CrossEncoderTrainer(
         model=model,
-        tokenizer=model.tokenizer,
+        tokenizer=tokenizer,
         args=training_args,
         train_dataset=train,
         eval_dataset=test,
