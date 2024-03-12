@@ -7,7 +7,6 @@ import logging
 from transformers.trainer_utils import EvalPrediction
 from sentence_transformers import util
 from transformers import PreTrainedTokenizerBase
-import torch
 
 logger = logging.getLogger()
 
