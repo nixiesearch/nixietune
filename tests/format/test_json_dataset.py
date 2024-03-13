@@ -22,3 +22,25 @@ def test_doc_only():
         "neg": [[], []],
         "negscore": [[], []],
     }
+
+
+def test_negs():
+    ds = Dataset.from_list([{"query": "foo", "doc": "bar", "neg": ["no"], "negscore": [0]}])
+    result = JSONDataset.from_dataset(ds).to_dict()
+    assert result == {
+        "doc": ["bar"],
+        "query": ["foo"],
+        "neg": [["no"]],
+        "negscore": [[0]],
+    }
+
+
+def test_negs_no_score():
+    ds = Dataset.from_list([{"query": "foo", "doc": "bar", "neg": ["no"]}])
+    result = JSONDataset.from_dataset(ds).to_dict()
+    assert result == {
+        "doc": ["bar"],
+        "query": ["foo"],
+        "neg": [["no"]],
+        "negscore": [[0]],
+    }
