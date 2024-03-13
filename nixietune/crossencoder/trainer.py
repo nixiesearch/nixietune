@@ -85,16 +85,16 @@ class CrossEncoderDataset:
             for query, pos, negs, negscores in zip(batch["query"], batch["doc"], batch["neg"], batch["negscore"]):
                 pairs.append((query, pos))
                 labels.append(1.0)
-
-                if num_negatives:
-                    neg_sample = random.choices(list(zip(negs, negscores)), k=num_negatives)
-                    for neg, score in neg_sample:
-                        pairs.append((query, neg))
-                        labels.append(score)
-                else:
-                    for neg, score in zip(negs, negscores):
-                        pairs.append((query, neg))
-                        labels.append(score)
+                if len(negs) > 0:
+                    if num_negatives:
+                        neg_sample = random.choices(list(zip(negs, negscores)), k=num_negatives)
+                        for neg, score in neg_sample:
+                            pairs.append((query, neg))
+                            labels.append(score)
+                    else:
+                        for neg, score in zip(negs, negscores):
+                            pairs.append((query, neg))
+                            labels.append(score)
 
             result = self.tokenizer(pairs, padding=False, truncation=True, max_length=self.max_len)
             result["labels"] = labels
