@@ -10,8 +10,8 @@ from tqdm import tqdm
 @dataclass
 class GenArgs:
     model_name: str = field(metadata={"help": "embedding model"})
-    query_file: str = field(metadata={"help": "input file with queries"})
-    doc_file: str = field(metadata={"help": "input file with docs"})
+    query_file: str = field(metadata={"help": "input file with queries+doc tuples"})
+    doc_file: str = field(metadata={"help": "input file with docs corpus"})
     out_file: str = field(metadata={"help": "path to output file"})
     query_prefix: str = field(default="", metadata={"help": "query prefix"})
     doc_prefix: str = field(default="", metadata={"help": "doc prefix"})

@@ -55,6 +55,10 @@ class JSONDataset:
 
     @staticmethod
     def process_batch(batch: Dict[str, List]) -> Dict[str, List]:
+        allowed_keys = ["query", "doc", "neg", "negscore"]
+        for key in batch.keys():
+            if key not in allowed_keys:
+                raise Exception(f"dataset can only have {allowed_keys} keys, but got unexpected {key}")
         if "query" not in batch and "doc" not in batch:
             raise Exception("dataset expected to have query and/or doc fields")
         else:
@@ -83,5 +87,7 @@ class JSONDataset:
                 for negs in batch["neg"]:
                     negscore.append([0] * len(negs))
             else:
-                negscore.append([])
-        return {"query": queries, "doc": doc, "neg": neg, "negscore": negscore}
+                negscore = [[]] * batch_size
+        result = {"query": queries, "doc": doc, "neg": neg, "negscore": negscore}
+
+        return result

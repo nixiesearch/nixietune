@@ -7,6 +7,8 @@ import logging
 from transformers.trainer_utils import EvalPrediction
 from sentence_transformers import util
 from transformers import PreTrainedTokenizerBase
+import numpy as np
+from nixietune.metrics.metrics import ROCAUC, Histogram
 
 logger = logging.getLogger()
 
@@ -15,6 +17,7 @@ class EvalMetrics:
     def __init__(self, metrics: List[str], tokenizer: PreTrainedTokenizerBase) -> None:
         self.logger = logging.getLogger()
         self.metrics = {}
+        self.tokenizer = tokenizer
         for metric_name in metrics:
             match metric_name.lower().split("@"):
                 case ["ndcg"]:
@@ -29,6 +32,10 @@ class EvalMetrics:
                     self.metrics[metric_name] = RetrievalMRR()
                 case ["mrr", k]:
                     self.metrics[metric_name] = RetrievalMRR(top_k=int(k))
+                case ["auc"]:
+                    self.metrics[metric_name] = ROCAUC()
+                case ["hist"]:
+                    self.metrics[metric_name] = Histogram(buckets=50, range=(0.0, 1.0))
                 case other:
                     logger.warn(f"Metric type {other} is not yet supported")
         self.sep_token_id = tokenizer.sep_token_id
@@ -37,7 +44,9 @@ class EvalMetrics:
     def compute_ce(self, embeds: EvalPrediction) -> Dict[str, float]:
         # find positions of [sep] token for all query-doc pairs
         inputs = torch.from_numpy(embeds.inputs)
+
         sep_positions = torch.argmax((inputs == self.sep_token_id).to(dtype=torch.int), dim=-1)
+        print(sep_positions)
         # mask everything beyond the [sep] token
         masked_queries = (torch.arange(inputs.size(1)) < sep_positions[..., None]) * inputs
         # char sum as a hashcode? why not!
@@ -45,8 +54,9 @@ class EvalMetrics:
 
         _, indexes = torch.unique_consecutive(query_hashes, return_inverse=True, dim=0)
         scores = torch.from_numpy(embeds.predictions)
-        targets = torch.from_numpy(embeds.label_ids)
-        # print(f"ind={indexes.shape} scores={scores.shape} target={targets.shape}")
+        targets = torch.from_numpy(embeds.label_ids).to(dtype=torch.int)
+        # torch.set_printoptions(profile="full")
+        # print(f"ind={indexes} scores={scores} target={targets}")
         result = {name: metric(preds=scores, target=targets, indexes=indexes) for name, metric in self.metrics.items()}
         return result
 
@@ -58,3 +68,12 @@ class EvalMetrics:
         targets = torch.from_numpy(embeds.label_ids)
         result = {name: metric(preds=scores, target=targets, indexes=indexes) for name, metric in self.metrics.items()}
         return result
+
+    def compute_ranker(self, result: EvalPrediction) -> Dict[str, float]:
+        preds = np.where(result.predictions != -100, result.predictions, self.tokenizer.pad_token_id)
+        decoded_preds = self.tokenizer.batch_decode(preds, device="cpu", skip_special_tokens=False)
+        labels = np.where(result.label_ids != -100, result.label_ids, self.tokenizer.pad_token_id)
+        decoded_labels = self.tokenizer.batch_decode(labels, device="cpu", skip_special_tokens=False)
+        print(f"labels: {decoded_preds}")
+        print(f"preds: {decoded_labels}")
+        return {}

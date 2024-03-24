@@ -17,6 +17,7 @@ What Nixietune can do for you:
 
 * Fine-tune an existing embedding model on your labeled data.
 * Generate synthetic queries and labels
+* Train a cross-encoder reranker model.
 
 ## Usage
 
@@ -25,8 +26,8 @@ What Nixietune can do for you:
 To fine-tune a semantic search embedding model on your data:
 
 * **Install nixietune**: you need a GPU for that!
-* **Format your data in a nixietune format**: a TREC json/tsv file format with a specific schema.
-* **Run the training**: for base/small models it takes less than an hour on a single GPU.
+* **Format your data in a nixietune format**: a JSON file format with a specific schema.
+* **Run the training**: for base/small models it takes less than an hour on a single desktop GPU.
 * **Tinker with params**: choose the best loss and make your model training faster.
 
 ### Installation
@@ -50,11 +51,8 @@ Nixietune expects a specific JSONL input format for your documents:
 ```json
 {
     "query": "pizza",
-    "positive": [
-        "Standard Serious Pizza",
-        "60 Seconds to Napoli",
-    ],
-    "negative": [
+    "doc": "Standard Serious Pizza",
+    "neg": [
         "Burgermeister",
         "Risa Chicken",
     ]
@@ -63,52 +61,57 @@ Nixietune expects a specific JSONL input format for your documents:
 
 The document schema can be described as:
 
-* `query`: required, string. An anchor search query for the whole group of documents.
-* `positive`: required, list[string]. A one or more positive documents for the query above.
-* `negative`: optional, list[string]. A zero or more negative documents for the query.
+* `query`: `string`. An anchor search query for the whole group of documents.
+* `doc`: `string`. A one or more positive documents for the query above.
+* `neg`: `list[string]`. A zero or more negative documents for the query.
+* `negscore`: `list[float]`. A zero or more scores for negatives.
 
-The `InfoNCE` loss supports negative-less training - when all the other in-batch positives are treated as negatives.
+All fields are formally optional and different modules require different fields, but for a traditional embedding fine-tuning we need `query`, `doc` and optionally `neg` fields to be present.
+
+Some losses like InfoNCE can be trained without negatives (so you need only `query` and `doc` fields in the training data), but usually you can get much better results with explicit negatives.
 
 ### Run the training
 
-Let's fine-tune a [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) embedding model on a [nixiesearch/ms-marco-hard-negatives](https://huggingface.co/datasets/nixiesearch/ms-marco-hard-negatives) dataset, using the InfoNCE loss. 
+Let's fine-tune a [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) embedding model on a [nixiesearch/amazon-esci](https://huggingface.co/datasets/nixiesearch/amazon-esci) dataset, using the InfoNCE loss. 
 
 ```shell
-python -m nixietune examples/msmarco.json
+python -m nixietune.biencoder examples/esci.json
 ```
 
-The [`msmarco.json`](examples/msmarco.json) configuration file is based on a HuggingFace Transformer TrainingArguments with some extra settings:
+The [`esci.json`](examples/esci.json) configuration file is based on a HuggingFace Transformer TrainingArguments with some extra settings:
 
 ```json
 {
-    "train_dataset": "nixiesearch/ms-marco-hard-negatives",
-    "eval_dataset": "nixiesearch/ms_marco",
     "seq_len": 128,
     "target": "infonce",
+    "train_dataset": "nixiesearch/amazon-esci",
+    "eval_dataset": "nixiesearch/amazon-esci",
+    "train_split": "train[:10%]",
+    "eval_split": "test_1k",
     "model_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
-    "output_dir": "minilm-msmarco-infonce8",
+    "output_dir": "out",
     "num_train_epochs": 1,
     "seed": 33,
-    "per_device_train_batch_size": 256,
-    "per_device_eval_batch_size": 256,
+    "per_device_train_batch_size": 512,
+    "per_device_eval_batch_size": 512,
     "fp16": true,
     "logging_dir": "logs",
     "gradient_checkpointing": true,
     "gradient_accumulation_steps": 1,
     "dataloader_num_workers": 14,
-    "eval_steps": 0.05,
-    "logging_steps": 0.05,
+    "eval_steps": 0.1,
+    "logging_steps": 0.1,
     "evaluation_strategy": "steps",
     "torch_compile": true,
     "report_to": [],
     "save_strategy": "epoch",
     "num_negatives": 8,
-    "query_prefix": "query: ",
-    "document_prefix": "passage: "
-}
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.05,
+    "learning_rate": 5e-5
 ```
 
-It takes around 60 minutes to fine-tune an `all-MiniLM-L6-v2` on a MS MARCO hard negatives on a single RTX4090 GPU.
+It takes around 60 minutes to fine-tune an `all-MiniLM-L6-v2` on an Amazon ESCI dataset on a single RTX4090 GPU.
 
 ### Choosing the best parameters
 
@@ -120,7 +123,49 @@ The following training parameters are worth tuning:
 * `seq_len`: context length of the model. Usually it's around 128-160 for most models in MTEB leaderboard.
 * `gradient_checkpointing`: reduces VRAM usage sugnificantly (up to 70%) with a small 10% performance penalty, as we recompute gradients instead of storing them. If unsure, choose `true`
 * `num_negatives`: for `infonce`/`triplet` targets, how many negatives from the dataset to select.
-* `query_prefix` and `document_prefix`: prompt labels for asymmetric models - when the model can distinguish between query and document passages.
+* `query_prefix` and `document_prefix`: prompt labels for asymmetric models like E5 - when the model can distinguish between query and document passages.
+
+## Training a cross-encoder
+
+Cross-encoders are not limited by the restrictions of cosine space, and usually provide much more precise result - for the extra cost of much resource-hungry inference. 
+
+Training a cross-encoder with `nixietune` requires negatives to be present in your data (so `query`, `doc` and `neg` fields) and is possible with the following config file:
+
+```json
+{
+    "seq_len": 128,
+    "train_dataset": "nixiesearch/amazon-esci",
+    "eval_dataset": "nixiesearch/amazon-esci",
+    "train_split": "train",
+    "eval_split": "test_1k",
+    "model_name_or_path": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "output_dir": "out",
+    "num_train_epochs": 1,
+    "seed": 33,
+    "per_device_train_batch_size": 1024,
+    "per_device_eval_batch_size": 1024,
+    "fp16": true,
+    "logging_dir": "logs",
+    "gradient_checkpointing": true,
+    "gradient_accumulation_steps": 1,
+    "dataloader_num_workers": 14,
+    "eval_steps": 0.1,
+    "logging_steps": 0.1,
+    "evaluation_strategy": "steps",
+    "torch_compile": false,
+    "report_to": [],
+    "save_strategy": "epoch",
+    "lr_scheduler_type": "cosine",
+    "warmup_ratio": 0.05,
+    "learning_rate": 5e-5
+}
+```
+
+It can be launched with the following command:
+
+```shell
+python -m nixietune.crossencoder examples/esci_ce.json
+```
 
 ## License
 

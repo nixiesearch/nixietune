@@ -2,11 +2,14 @@ from transformers import Trainer, AutoModelForSequenceClassification, PreTrained
 from nixietune.crossencoder.arguments import CrossEncoderArguments
 from datasets import Dataset
 from typing import List, Optional, Dict, Any, Union, Tuple
-from nixietune.metrics import EvalMetrics
+from nixietune.metrics.callback import EvalMetrics
 import torch
 from transformers.tokenization_utils_base import BatchEncoding
 from torch import nn
 import random
+import logging
+
+logger = logging.getLogger()
 
 
 class CrossEncoderTrainer(Trainer):
@@ -21,10 +24,16 @@ class CrossEncoderTrainer(Trainer):
         **kwargs,
     ) -> None:
         self.args = args
-        self.eval_metrics = EvalMetrics(eval_metrics, tokenizer)
         self.tokenizer = tokenizer
         self.tokenizer.model_max_length = args.seq_len
         self.tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
+        self.tokenizer.pad_token = "<unk>"
+        if not self.tokenizer.eos_token:
+            self.tokenizer.eos_token_id = 102
+        self.tokenizer.sep_token = self.tokenizer.eos_token
+        logger.info(f"pad={self.tokenizer.pad_token} sep={self.tokenizer.sep_token} eos={self.tokenizer.eos_token}")
+        self.eval_metrics = EvalMetrics(eval_metrics, tokenizer)
+        model.config.pad_token_id = self.tokenizer.pad_token_id
         self.loss = nn.BCEWithLogitsLoss()
         args.label_names = ["labels"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
@@ -42,11 +51,6 @@ class CrossEncoderTrainer(Trainer):
             eval_processed = None
             args.evaluation_strategy = "no"
 
-        if args.max_steps == -1:
-            batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps * args.world_size
-            dataset_size = len(train_processed)
-            args.max_steps = int(dataset_size / batch_size)
-            print(f"dataset {dataset_size} batch {batch_size}")
         super().__init__(
             args=args,
             model=model,

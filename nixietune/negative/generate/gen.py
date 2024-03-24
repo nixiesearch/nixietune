@@ -4,6 +4,7 @@ import hnswlib
 from typing import List
 from dataclasses import dataclass, field
 import logging
+from tqdm import tqdm
 
 logger = logging.getLogger()
 
@@ -22,7 +23,7 @@ class NegativeGenerator:
         query = JSONDataset.load(path=query_file, split="train").to_dict()
         self.queries = []
         self.qpos = {}
-        for q, d in zip(query["query"], query["doc"]):
+        for q, d in tqdm(zip(query["query"], query["doc"]), desc="aggregating"):
             positives = self.qpos.get(q, [])
             positives.append(d)
             self.qpos[q] = positives

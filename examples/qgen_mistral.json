@@ -17,9 +17,7 @@
     "logging_steps": 0.03,
     "evaluation_strategy": "steps",
     "torch_compile": false,
-    "report_to": [
-        "wandb"
-    ],
+    "report_to": [],
     "save_strategy": "epoch",
     "streaming": false,
     "do_eval": true,
