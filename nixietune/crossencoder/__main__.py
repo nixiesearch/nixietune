@@ -35,8 +35,8 @@ if __name__ == "__main__":
     config.num_labels = 1
     if training_args.lora:
         bnb_config = BitsAndBytesConfig(
-            load_in_8bit=True if training_args.lora.load_bits == 8 else False,
-            load_in_4bit=True if training_args.lora.load_bits == 4 else False,
+            load_in_8bit=True if training_args.lora_load_bits == 8 else False,
+            load_in_4bit=True if training_args.lora_load_bits == 4 else False,
             bnb_4bit_use_double_quant=False,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16,
@@ -47,18 +47,21 @@ if __name__ == "__main__":
             config=config,
             quantization_config=bnb_config,
             torch_dtype=torch.bfloat16,
+            attn_implementation=training_args.attn_implementation,
         )
         lora_config = LoraConfig(
-            r=training_args.lora.r,
-            lora_alpha=training_args.lora.alpha,
+            r=training_args.lora_r,
+            lora_alpha=training_args.lora_alpha,
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj", "lm_head"],
-            lora_dropout=training_args.lora.dropout,
+            lora_dropout=training_args.lora_dropout,
         )
+        model = get_peft_model(model, lora_config)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             config=config,
             torch_dtype=torch.bfloat16,
+            attn_implementation=training_args.attn_implementation,
         )
 
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, add_eos_token=True, add_bos_token=True)
