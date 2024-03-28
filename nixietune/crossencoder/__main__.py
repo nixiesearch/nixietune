@@ -60,7 +60,6 @@ if __name__ == "__main__":
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             config=config,
-            torch_dtype=torch.bfloat16,
             attn_implementation=training_args.attn_implementation,
         )
 

@@ -30,7 +30,8 @@ dependencies = [
     "evaluate",
     "trl",
     "sentencepiece",
-    "hnswlib"
+    "hnswlib",
+    "wheel"
 ]
 
 [project.optional-dependencies]
