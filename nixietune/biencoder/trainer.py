@@ -56,6 +56,9 @@ class BiencoderTrainer(Trainer):
             case "cosent":
                 self.loss = losses.CoSENTLoss(model)
                 self.format = QueryDocLabelLayout()
+            case "mnrl":
+                self.loss = losses.MultipleNegativesRankingLoss(model)
+                self.format = QueryPosNegsLayout(num_negatives=args.num_negatives)
             case "infonce":
                 self.loss = InfoNCELoss(
                     model, negative_mode=args.infonce_negative_mode, temperature=args.infonce_temperature
@@ -69,9 +72,8 @@ class BiencoderTrainer(Trainer):
         args.label_names = ["label"]
         args.gradient_checkpointing_kwargs = {"use_reentrant": False}
         args.remove_unused_columns = False
-        # self.print_raw_stats(train_dataset)
         train_processed = self.prepare_dataset(dataset=train_dataset, format=self.format)
-        # self.print_tokenized_stats(train_processed)
+        self.print_tokenized_stats(train_processed)
         if eval_dataset is not None:
             self.eval_loss = losses.CosineSimilarityLoss(model)
             self.eval_format = QueryDocLabelLayout()
@@ -162,28 +164,15 @@ class BiencoderTrainer(Trainer):
         )
         return self.tokenizer.pad(batch, padding="longest", pad_to_multiple_of=8, return_tensors="pt")
 
-    def print_raw_stats(self, dataset: Dataset, samples: int = 5000) -> None:
-        positives_per_query = []
-        negatives_per_query = []
-        for row in tqdm(islice(dataset, samples), desc="Collecting raw stats", total=samples):
-            pos = len(row["positive"])
-            positives_per_query.append(pos)
-            neg = len(row["negative"])
-            negatives_per_query.append(neg)
-        ppq = np.percentile(positives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-        npq = np.percentile(negatives_per_query, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-        logger.info(f"Negatives per query: {npq}")
-        logger.info(f"Positives per query: {ppq}")
-
     def print_tokenized_stats(self, dataset: Dataset, samples: int = 5000) -> None:
         query_tokens = []
         doc_tokens = []
         for row in tqdm(islice(dataset, samples), desc="Collecting token stats", total=samples):
             features = row["features"]
             query, positive, *docs = features
-            query_tokens.append(len(query["input_ids"]))
-            doc_tokens.append(len(positive["input_ids"]))
-            [doc_tokens.append(len(neg["input_ids"])) for neg in docs]
+            query_tokens.append(len(query))
+            doc_tokens.append(len(positive))
+            [doc_tokens.append(len(neg)) for neg in docs]
         qtp = np.percentile(query_tokens, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], method="nearest")
         dtp = np.percentile(doc_tokens, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], method="nearest")
         logger.info(f"Query tokens:    {qtp}")

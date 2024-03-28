@@ -84,6 +84,7 @@ The [`esci.json`](examples/esci.json) configuration file is based on a HuggingFa
 {
     "seq_len": 128,
     "target": "infonce",
+    "num_negatives": 8,
     "train_dataset": "nixiesearch/amazon-esci",
     "eval_dataset": "nixiesearch/amazon-esci",
     "train_split": "train[:10%]",
@@ -105,10 +106,10 @@ The [`esci.json`](examples/esci.json) configuration file is based on a HuggingFa
     "torch_compile": true,
     "report_to": [],
     "save_strategy": "epoch",
-    "num_negatives": 8,
     "lr_scheduler_type": "cosine",
     "warmup_ratio": 0.05,
     "learning_rate": 5e-5
+}
 ```
 
 It takes around 60 minutes to fine-tune an `all-MiniLM-L6-v2` on an Amazon ESCI dataset on a single RTX4090 GPU.
@@ -166,6 +167,12 @@ It can be launched with the following command:
 ```shell
 python -m nixietune.crossencoder examples/esci_ce.json
 ```
+
+## Generating synthetic queries
+
+Nixietune has a module for an LLM-based synthetic query generation:
+
+* 
 
 ## License
 

@@ -46,7 +46,6 @@ class EvalMetrics:
         inputs = torch.from_numpy(embeds.inputs)
 
         sep_positions = torch.argmax((inputs == self.sep_token_id).to(dtype=torch.int), dim=-1)
-        print(sep_positions)
         # mask everything beyond the [sep] token
         masked_queries = (torch.arange(inputs.size(1)) < sep_positions[..., None]) * inputs
         # char sum as a hashcode? why not!
