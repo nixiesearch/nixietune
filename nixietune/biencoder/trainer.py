@@ -47,6 +47,12 @@ class BiencoderTrainer(Trainer):
         tokenizer.model_max_length = args.seq_len
         tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
         match args.target:
+            case "contrastive":
+                self.loss = losses.ContrastiveLoss(model)
+                self.format = QueryDocLabelLayout()
+            case "triplet":
+                self.loss = losses.TripletLoss(model)
+                self.format = QueryPosNegsLayout(num_negatives=1)
             case "cosine":
                 self.loss = losses.CosineSimilarityLoss(model)
                 self.format = QueryDocLabelLayout()
