@@ -49,7 +49,10 @@ def main(argv):
         if trainer.is_deepspeed_enabled:
             logger.info("Not running eval before train: deepspeed is enabled (and not yet fully initialized)")
         else:
-            logger.info(trainer.evaluate())
+            if training_args.eval_zero:
+                logger.info(trainer.evaluate())
+            else:
+                logger.info("Skipping eval at step 0")
         trainer.add_callback(EvaluateFirstStepCallback())
 
     trainer.train()
