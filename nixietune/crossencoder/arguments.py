@@ -15,6 +15,8 @@ class CrossEncoderArguments(TrainingArguments):
     )
 
     num_negatives: int = field(default=4, metadata={"help": "number of negatives to sample"})
+    neg_strategy: str = field(default="random", metadata={"help": "how to sample negatives: random/first"})
+    layout: str = field(default="cross", metadata={"help": "cross/rank"})
     lora: bool = field(default=False, metadata={"help": "enable LoRA"})
     lora_r: int = field(default=16, metadata={"help": "R value for LoRA"})
     lora_alpha: int = field(default=32, metadata={"help": "alpha value for LoRA"})

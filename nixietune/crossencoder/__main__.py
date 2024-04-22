@@ -17,6 +17,7 @@ from nixietune.crossencoder.trainer import CrossEncoderTrainer
 import torch
 from peft import get_peft_model, LoraConfig
 from typing import Tuple
+from nixietune.crossencoder.dataset import QueryDocListFormat, QueryDocTupleFormat
 
 setup_logging()
 logger = logging.getLogger()
@@ -24,15 +25,24 @@ logger = logging.getLogger()
 
 if __name__ == "__main__":
     parser = HfArgumentParser((ModelArguments, DatasetArguments, CrossEncoderArguments))
-    config: Tuple[ModelArguments, DatasetArguments, CrossEncoderArguments]
+    model_config: Tuple[ModelArguments, DatasetArguments, CrossEncoderArguments]
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        config = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_config = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
-        config = parser.parse_args_into_dataclasses()
-    model_args, dataset_args, training_args = config
+        model_config = parser.parse_args_into_dataclasses()
+    model_args, dataset_args, training_args = model_config
     device = "cpu" if training_args.use_cpu else "cuda"
-    config = AutoConfig.from_pretrained(model_args.model_name_or_path)
-    config.num_labels = 1
+    model_config = AutoConfig.from_pretrained(model_args.model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, add_eos_token=True, add_bos_token=True)
+    match training_args.layout:
+        case "cross":
+            model_config.num_labels = 1
+            format = QueryDocTupleFormat(tokenizer, training_args.seq_len)
+        case "rank":
+            model_config.num_labels = training_args.num_negatives + 1
+            format = QueryDocListFormat(tokenizer, training_args.seq_len)
+        case other:
+            raise Exception(f"layout {training_args.layout} not supported")
     if training_args.lora:
         bnb_config = BitsAndBytesConfig(
             load_in_8bit=True if training_args.lora_load_bits == 8 else False,
@@ -44,7 +54,7 @@ if __name__ == "__main__":
 
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
-            config=config,
+            config=model_config,
             quantization_config=bnb_config,
             torch_dtype=torch.bfloat16,
             attn_implementation=training_args.attn_implementation,
@@ -59,11 +69,9 @@ if __name__ == "__main__":
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
-            config=config,
+            config=model_config,
             attn_implementation=training_args.attn_implementation,
         )
-
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, add_eos_token=True, add_bos_token=True)
 
     train = JSONDataset.load(
         dataset_args.train_dataset,
@@ -86,13 +94,14 @@ if __name__ == "__main__":
         train_dataset=train,
         eval_dataset=test,
         eval_metrics=training_args.eval_metrics,
+        fmt=format,
     )
-    if test is not None:
-        if trainer.is_deepspeed_enabled:
-            logger.info("Not running eval before train: deepspeed is enabled (and not yet fully initialized)")
-        else:
-            logger.info(trainer.evaluate())
-        trainer.add_callback(EvaluateFirstStepCallback())
+    # if test is not None:
+    #     if trainer.is_deepspeed_enabled:
+    #         logger.info("Not running eval before train: deepspeed is enabled (and not yet fully initialized)")
+    #     else:
+    #         logger.info(trainer.evaluate())
+    #     trainer.add_callback(EvaluateFirstStepCallback())
 
     trainer.train()
     model.save_pretrained(save_directory=training_args.output_dir)
