@@ -38,3 +38,5 @@ class BiencoderTrainingArguments(TrainingArguments):
     eval_metrics: List[str] = field(
         default_factory=lambda: ["ndcg@10"], metadata={"help": "metrics to eval during training"}
     )
+
+    eval_zero: bool = field(default=False, metadata={"help": "Should we run eval before the training?"})
