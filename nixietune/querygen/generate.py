@@ -1,20 +1,24 @@
 from dataclasses import dataclass, field
-from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding, GenerationConfig, PreTrainedTokenizerBase
+from transformers import (
+    AutoTokenizer,
+    pipeline,
+)
 import torch
 from typing import Dict, List, Any
-from nixietune.format.jsontokenized import JSONTokenizedDataset
-from torch.utils.data import DataLoader
+from nixietune.format.json import JSONDataset
 from tqdm import tqdm
+import itertools
+import json
 
 
 @dataclass
 class GeneratorArguments:
     model_name_or_path: str = field(metadata={"help": "model path"})
     seq_len: int = field(default=512, metadata={"help": "sequence length of the input passage"})
-    prompt_modifier: str = field(default="", metadata={"help": "prompt prefix modifiers"})
     max_new_tokens: int = field(default=32, metadata={"help": "how many new tokens should be generated max"})
-    batch_size: int = field(default=48, metadata={"help": "batch size"})
+    batch_size: int = field(default=32, metadata={"help": "batch size"})
     num_workers: int = field(default=8, metadata={"help": "number of data loader workers"})
+    strategy: str = field(default="greedy", metadata={"help": "sampling strategy: greedy/beam=N"})
 
 
 @dataclass
@@ -26,106 +30,72 @@ class DatasetArguments:
 class QueryGenerator:
     def __init__(self, args: GeneratorArguments) -> None:
         self.args = args
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name_or_path,
-            add_eos_token=False,
-            add_bos_token=False,
-            use_fast=False,
-            pad_token="<unk>",
-            padding_side="left",
-        )
-        self.tokenizer.pad_token = "<unk>"
-        model_kwargs = {}
-        self.model = AutoModelForCausalLM.from_pretrained(
-            args.model_name_or_path,
-            device_map="auto",
+        self.generator = pipeline(
+            task="text-generation",
+            model=args.model_name_or_path,
             torch_dtype=torch.bfloat16,
-            **model_kwargs,
-        )
-        self.model.eval()
-
-    def generate(self, input: str):
-        data_loader = QueryGenerator.load_dataset(
-            input=input,
-            tokenizer=self.tokenizer,
-            seq_len=self.args.seq_len,
-            num_workers=self.args.num_workers,
-            device=self.model.device,
-            batch_size=self.args.batch_size,
+            device_map="auto",
         )
 
-        for batch in tqdm(data_loader, desc="generating queries"):
-            for item in self.process_batch(batch):
-                yield item
-
-    def process_batch(self, batch) -> List[Dict[str, Any]]:
-        config = GenerationConfig(
-            max_new_tokens=self.args.max_new_tokens,
-            pad_token_id=self.tokenizer.pad_token_id,
-            bos_token_id=self.tokenizer.bos_token_id,
-            eos_token_id=self.tokenizer.eos_token_id,
-        )
-        outputs = self.model.generate(**batch, generation_config=config)
-        decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        passages = []
-        queries = []
-        for out in decoded:
-            pos = out.index("query: ")
-            queries.append(out[pos + 7 :])
-            passages.append(out[:pos])
-
-        return [{"query": query, "doc": doc} for doc, query in zip(passages, queries)]
-
-    @staticmethod
-    def load_dataset(
-        input: str, tokenizer: PreTrainedTokenizerBase, seq_len: int, num_workers: int, batch_size: int, device
-    ) -> DataLoader:
-        pt = PromptTokenizer(tokenizer, seq_len, device)
-        corpus = JSONTokenizedDataset.from_file(
-            input,
-            num_workers=num_workers,
-            split="train",
-            tokenizer=tokenizer,
-            max_len=seq_len,
-        ).select_columns(["doc"])
-        processed = corpus.map(
-            function=pt.tokenize_batch,
+    def generate(self, input: str, output: str):
+        corpus = JSONDataset.from_file(input, num_workers=self.args.num_workers, split="train").select_columns(["doc"])
+        prompter = Prompter(self.args.model_name_or_path, self.args.seq_len)
+        prompts = corpus.map(
+            function=prompter.make_prompt,
             batched=True,
             desc="formatting prompts",
-            remove_columns=["doc"],
-            num_proc=num_workers,
+            num_proc=self.args.num_workers,
         )
-        loader = DataLoader(
-            processed,
-            batch_size=batch_size,
-            collate_fn=pt.collate_batch,
-        )
-        return loader
+        dataset_dict = prompts.to_dict()
+        dataset = []
+        for doc, prompt, length in zip(dataset_dict["doc"], dataset_dict["prompt"], dataset_dict["length"]):
+            dataset.append({"doc": doc, "prompt": prompt, "length": length})
+        ds2 = sorted(dataset, key=lambda x: x["length"], reverse=True)
+        match self.args.strategy:
+            case "greedy":
+                gen_kwargs = {}
+            case other if other.startswith("beam="):
+                gen_kwargs = {"do_sample": True, "num_beams": int(other.split("=")[1])}
+        print(gen_kwargs)
+        with open(output, "w") as file:
+            for batch in tqdm(list(itertools.batched(ds2, self.args.batch_size)), unit_scale=self.args.batch_size):
+                out = self.generator(
+                    text_inputs=[item["prompt"] for item in batch],
+                    batch_size=self.args.batch_size,
+                    return_full_text=True,
+                    max_new_tokens=self.args.max_new_tokens,
+                    num_return_sequences=1,
+                    **gen_kwargs,
+                )
+                for item in out:
+                    raw = item[0]["generated_text"]
+                    doc = prompter.parse_doc(raw)
+                    query = prompter.parse_response(raw)
+                    file.write(json.dumps({"doc": doc, "query": query}) + "\n")
 
 
-class PromptTokenizer:
-    def __init__(self, tok: PreTrainedTokenizerBase, seq_len: int, device):
-        self.tokenizer = tok
+class Prompter:
+    def __init__(self, model, seq_len):
+        self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.seq_len = seq_len
-        self.query_input_ids = self.tokenizer(" query:", padding=False)["input_ids"]  # no space at end!
-        self.device = device
 
-    def collate_batch(self, batch: List[Dict[str, Any]]):
-        passages_inputs = [item["input_ids"] for item in batch]
-        passages_attmasks = [item["attention_mask"] for item in batch]
-        encoded = BatchEncoding({"input_ids": passages_inputs, "attention_mask": passages_attmasks})
-        padded = self.tokenizer.pad(encoded, pad_to_multiple_of=8, return_tensors="pt").to(self.device)
-        return padded
+    def make_prompt(self, batch: Dict[str, List[Any]]) -> Dict[str, List]:
+        trimmed = self.tokenizer(batch["doc"], padding=False, truncation=True, max_length=self.seq_len)
+        decoded = self.tokenizer.batch_decode(trimmed["input_ids"], skip_special_tokens=True)
+        prompt = "### Instruction:\nWrite a short query which can be used to search a given document:\n\n### Input:\n{input}\n\n### Response:\n"
+        return {
+            "prompt": [prompt.format(input=doc) for doc in decoded],
+            "length": [len(doc) for doc in trimmed["input_ids"]],
+        }
 
-    def tokenize_batch(self, batch: Dict[str, List[Any]]) -> Dict[str, List]:
-        tokenized_passages = batch["doc"]
-        max_doc_len = self.seq_len - len(self.query_input_ids) - 1
-        passages_inputs = []
-        passages_attmasks = []
-        for tp in tokenized_passages:
-            passage = (
-                [self.tokenizer.bos_token_id] + tp[:max_doc_len] + self.query_input_ids
-            )  # no eos, as we expect to continue the generation
-            passages_inputs.append(passage)
-            passages_attmasks.append([1] * len(passage))
-        return {"input_ids": passages_inputs, "attention_mask": passages_attmasks}
+    def parse_doc(self, input: str) -> str:
+        left = "### Input:\n"
+        right = "\n\n### Response:\n"
+        start_index = input.find(left)
+        end_index = input.find(right)
+        return input[start_index + len(left) : end_index]
+
+    def parse_response(self, input: str) -> str:
+        right = "\n\n### Response:\n"
+        start_index = input.find(right)
+        return input[start_index + len(right) :].strip()

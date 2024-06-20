@@ -1,4 +1,4 @@
-from nixietune.querygen.generate.generate import QueryGenerator, GeneratorArguments, DatasetArguments
+from nixietune.querygen.generate import QueryGenerator, GeneratorArguments, DatasetArguments
 from nixietune.log import setup_logging
 import logging
 from transformers import HfArgumentParser
@@ -13,8 +13,4 @@ if __name__ == "__main__":
     gen_args, data_args = parser.parse_args_into_dataclasses()
 
     gen = QueryGenerator(gen_args)
-
-    with open(data_args.output_file, "w") as f:
-        for doc in gen.generate(data_args.input_file):
-            f.write(json.dumps(doc) + "\n")
-    # TRECDatasetWriter.save(out_path=data_args.output_path, dataset=result)
+    gen.generate(data_args.input_file, data_args.output_file)
