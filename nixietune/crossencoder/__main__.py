@@ -12,7 +12,6 @@ from transformers import (
 from nixietune.arguments import ModelArguments, DatasetArguments
 from nixietune.crossencoder.arguments import CrossEncoderArguments
 from nixietune.format.json import JSONDataset
-from nixietune.util.eval_callback import EvaluateFirstStepCallback
 from nixietune.crossencoder.trainer import CrossEncoderTrainer
 import torch
 from peft import get_peft_model, LoraConfig

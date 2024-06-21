@@ -2,7 +2,6 @@ from nixietune.querygen.generate import QueryGenerator, GeneratorArguments, Data
 from nixietune.log import setup_logging
 import logging
 from transformers import HfArgumentParser
-import json
 
 setup_logging()
 
