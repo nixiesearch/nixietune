@@ -8,3 +8,5 @@ logs
 dist
 experiments
 dist
+*.json
+*.jsonl

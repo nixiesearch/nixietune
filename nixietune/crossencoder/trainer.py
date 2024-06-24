@@ -1,7 +1,7 @@
 from transformers import Trainer, AutoModelForSequenceClassification, PreTrainedTokenizerBase
 from nixietune.crossencoder.arguments import CrossEncoderArguments
 from datasets import Dataset
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Union, Tuple
 from nixietune.metrics.callback import EvalMetrics
 import torch
 from torch import nn
